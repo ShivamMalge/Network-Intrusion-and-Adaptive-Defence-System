@@ -30,6 +30,13 @@ class ActionEncoder:
         self.action_dim = len(self.all_types) * self.max_nodes + 1
         self.no_op_index = self.action_dim - 1
 
+    def _get_no_op(self, agent_id: str) -> Any:
+        """Internal helper to return role-appropriate NO_OP."""
+        if agent_id.startswith("atk"):
+            return AttackerAction(agent_id, ActionType.ATTACKER_NO_OP)
+        else:
+            return DefenderAction(agent_id, ActionType.DEFENDER_NO_OP)
+
     def encode_action(self, action: Any, sorted_node_ids: List[str]) -> int:
         """
         Converts an Action object to a discrete index.
@@ -49,16 +56,17 @@ class ActionEncoder:
         Converts a discrete index to an Action object.
         """
         if index >= self.no_op_index:
-            if agent_id.startswith("atk"):
-                return AttackerAction(agent_id, ActionType.ATTACKER_NO_OP)
-            else:
-                return DefenderAction(agent_id, ActionType.DEFENDER_NO_OP)
+            return self._get_no_op(agent_id)
                 
         type_idx = index // self.max_nodes
         node_idx = index % self.max_nodes
         
+        # If node_idx is out of bounds for current observation, return NO_OP
+        if node_idx >= len(sorted_node_ids):
+             return self._get_no_op(agent_id)
+        
         action_type = self.all_types[type_idx]
-        target_node = sorted_node_ids[node_idx] if node_idx < len(sorted_node_ids) else None
+        target_node = sorted_node_ids[node_idx]
         
         if agent_id.startswith("atk"):
             # For EXPLOIT, we need a vuln_id. Baseline greedy use first available.
