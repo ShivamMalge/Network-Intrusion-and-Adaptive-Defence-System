@@ -61,7 +61,7 @@ def build_training_topology(env: EnvironmentEngine):
 
 
 def train(
-    max_episodes: int = 500,
+    max_episodes: int = 2000,
     max_steps: int = 50,
     train_start_threshold: int = 1000,
     batch_size: int = 64,
@@ -113,7 +113,11 @@ def train(
     
     # 5. Training Loop
     global_step = 0
-    reward_history = deque(maxlen=50)
+    
+    # Rolling Statistics
+    last_50_rewards = deque(maxlen=50)
+    last_50_lengths = deque(maxlen=50)
+    last_50_wins = deque(maxlen=50)
     
     print("Starting DQN Training...")
     
@@ -126,6 +130,7 @@ def train(
         state = env.state_encoder.encode(atk_obs, "attacker")
         
         episode_reward = 0
+        episode_steps = 0
         
         for step in range(env.max_steps):
             # Get Action Mask
@@ -147,6 +152,7 @@ def train(
             
             state = next_state
             episode_reward += reward
+            episode_steps += 1
             global_step += 1
             
             # Update last known atk_obs for next mask gen
@@ -180,13 +186,29 @@ def train(
                 target_net.load_state_dict(policy_net.state_dict())
                 
             if done:
+                # Record Win condition
+                win = 1 if info.get("termination_reason") == "CRITICAL_COMPROMISED" else 0
+                last_50_wins.append(win)
                 break
+        else:
+            # Handle max steps reached without termination (truncated)
+            last_50_wins.append(0)
                 
-        reward_history.append(episode_reward)
+        last_50_rewards.append(episode_reward)
+        last_50_lengths.append(episode_steps)
         
-        if episode % 10 == 0:
-            avg_reward = sum(reward_history) / len(reward_history)
-            print(f"Episode {episode} | Avg Reward: {avg_reward:.2f} | Epsilon: {epsilon:.3f} | Steps: {global_step}")
+        if episode % 50 == 0:
+            avg_reward = np.mean(last_50_rewards)
+            avg_len = np.mean(last_50_lengths)
+            win_rate = (np.mean(last_50_wins) * 100)
+            
+            print(f"Episode {episode}")
+            print(f"Avg Reward (last 50): {avg_reward:.2f}")
+            print(f"Win Rate (last 50): {win_rate:.0f}%")
+            print(f"Avg Episode Length (last 50): {avg_len:.1f}")
+            print(f"Epsilon: {epsilon:.3f}")
+            print(f"Replay Buffer Size: {len(replay_buffer)}")
+            print("-" * 40)
 
     # 8. Save Model
     save_path = "dqn_attacker.pt"
