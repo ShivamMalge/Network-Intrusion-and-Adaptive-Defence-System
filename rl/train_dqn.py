@@ -68,7 +68,7 @@ def train(
     target_update_freq: int = 1000,
     lr: float = 1e-3,
     gamma: float = 0.99,
-    decay_steps: int = 10000
+    decay_steps: int = 50000
 ):
     print("DEBUG: max_episodes =", max_episodes)
     

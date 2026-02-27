@@ -76,7 +76,7 @@ class DeterministicStepPipeline:
 
         # 5. Capture context for reward shaping
         target_node = attacker_action.target_node
-        pre_scanned = state.attacker_scanned
+        pre_scanned = set(state.attacker_scanned)
         pre_priv = PrivilegeLevel.NONE
         if target_node:
             try:
@@ -88,16 +88,20 @@ class DeterministicStepPipeline:
         self.update_state(state, effects)
 
         # 7. Check Terminal
-        done = self.check_termination(state)
+        done, termination_reason = self.check_termination(state)
+        info["termination_reason"] = termination_reason
         
         # 8. Rewards
         rewards = self.compute_rewards(
             state, effects, attacker_action, defender_action, 
-            attk_success, def_res, done, pre_scanned, pre_priv
+            attk_success, def_res, done, pre_scanned, pre_priv,
+            termination_reason
         )
         
         if done:
             state.mark_done()
+        else:
+            state.increment_time()
 
         return rewards, done, info
 
@@ -231,9 +235,7 @@ class DeterministicStepPipeline:
         # 8. Apply Privilege Escalations
         for node_id, new_level in effects.privilege_escalations:
             state.vulnerability_registry.escalate_privilege(node_id, new_level)
-            
-        # 9. Advance time
-        state.increment_time()
+
 
     def compute_rewards(
         self, 
@@ -245,7 +247,8 @@ class DeterministicStepPipeline:
         def_success: bool,
         done: bool,
         pre_scanned: Set[str],
-        pre_priv: PrivilegeLevel
+        pre_priv: PrivilegeLevel,
+        termination_reason: Optional[str]
     ) -> Dict[str, float]:
         rewards = {atk_action.agent_id: 0.0, def_action.agent_id: 0.0}
         atk_id = atk_action.agent_id
@@ -278,24 +281,12 @@ class DeterministicStepPipeline:
                     rewards[atk_id] += 5.0 # Combined bonus
 
         # 5. Terminal Reward (Successful CRITICAL compromise: +10.0)
-        # Check termination condition logic
-        is_critical_compromised = False
-        for node in state.graph_manager.get_all_nodes():
-            if node.node_type.name == "CRITICAL_ASSET":
-                try:
-                    if state.vulnerability_registry.get_privilege(node.node_id) == PrivilegeLevel.ROOT:
-                        is_critical_compromised = True
-                        break
-                except Exception:
-                    pass
-
-        if is_critical_compromised:
+        if termination_reason == "CRITICAL_COMPROMISED":
             rewards[atk_id] += 10.0
             rewards[def_action.agent_id] -= 5.0
 
         # 6. Timeout Penalty (-2.0)
-        # We define timeout here as done=True but no critical compromise
-        if done and state.timestamp > 50 and not is_critical_compromised:
+        if termination_reason == "TIMEOUT":
             rewards[atk_id] -= 2.0
 
         # Defender rewards (unchanged baseline)
@@ -304,18 +295,18 @@ class DeterministicStepPipeline:
 
         return rewards
 
-    def check_termination(self, state: SimulationState) -> bool:
-        # Timeout rule
-        if state.timestamp > 50:
-            return True
-            
-        # Critical Asset ROOT compromise rule
+    def check_termination(self, state: SimulationState) -> Tuple[bool, Optional[str]]:
+        # 1. Critical compromise has priority
         for node in state.graph_manager.get_all_nodes():
             if node.node_type.name == "CRITICAL_ASSET":
                 try:
                     if state.vulnerability_registry.get_privilege(node.node_id) == PrivilegeLevel.ROOT:
-                        return True
+                        return True, "CRITICAL_COMPROMISED"
                 except Exception:
                     pass
-                    
-        return False
+
+        # 2. Timeout condition
+        if state.timestamp >= 50:
+            return True, "TIMEOUT"
+
+        return False, None
