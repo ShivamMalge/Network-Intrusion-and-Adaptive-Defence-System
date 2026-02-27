@@ -44,3 +44,11 @@ class CentralizedRNG:
     def uniform(self, a: float, b: float) -> float:
         """Draw a uniform random float in [a, b]."""
         return self._rng_instance.uniform(a, b)
+
+    def choice(self, seq: Any) -> Any:
+        """Randomly choose an element from a non-empty sequence."""
+        return self._rng_instance.choice(seq)
+
+    def randint(self, a: int, b: int) -> int:
+        """Return a random integer N such that a <= N <= b."""
+        return self._rng_instance.randint(a, b)

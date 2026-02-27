@@ -33,6 +33,9 @@ class TransitionEffects:
     new_scans: List[str] = field(default_factory=list)
     new_compromises: List[str] = field(default_factory=list)
     new_detections: List[str] = field(default_factory=list)
+    
+    # Phase 5B Stochastic Detection
+    queued_detections: List[Tuple[str, int]] = field(default_factory=list)
 
 
 class DeterministicStepPipeline:
@@ -155,43 +158,62 @@ class DeterministicStepPipeline:
             # Phase 4 Epistemic: Stage compromise
             effects.new_compromises.append(target)
             
-            # Phase 4 Detection: If it's a monitored node or a high-value asset, defender might detect
+            # Phase 5B Stochastic Detection: If exploit succeeds AND node is monitored
             node = state.graph_manager.get_node(target)
             if node and node.metadata.get("monitored", False):
-                 effects.new_detections.append(target)
+                 # Probabilistic detection roll
+                 if self._rng.uniform(0.0, 1.0) < state.detection_probability:
+                     # Stage detection with delay
+                     trigger = state.timestamp + state.detection_delay
+                     effects.queued_detections.append((target, trigger))
                 
         return success
 
     def update_state(self, state: SimulationState, effects: TransitionEffects) -> None:
         """Apply all staged effects to the state."""
+        # Semantic Model A: Detection appears at t_exploit + detection_delay
+        horizon_time = state.timestamp + 1
         
-        # 1. Apply Epistemic updates first
+        # 1. Add new staged detections to state's queue (Phase 5B)
+        for node_id, trigger in effects.queued_detections:
+            state.add_to_detection_queue(node_id, trigger)
+
+        # 2. Handle False Positives (Phase 5B)
+        if self._rng.uniform(0.0, 1.0) < state.false_positive_rate:
+            all_nodes = [n.node_id for n in state.graph_manager.get_all_nodes()]
+            if all_nodes:
+                fp_node = self._rng.choice(all_nodes)
+                state.add_to_detection_queue(fp_node, state.timestamp + state.detection_delay)
+
+        # 3. Process triggered detections using end-of-step horizon
+        triggered = state.process_detection_queue(horizon_time)
+        for node_id in triggered:
+            state.add_detected_node(node_id)
+
+        # 4. Apply Epistemic updates (Phase 4)
         for node_id in effects.new_scans:
             state.add_scanned_node(node_id)
             
         for node_id in effects.new_compromises:
             state.add_compromised_node(node_id)
             
-        for node_id in effects.new_detections:
-            state.add_detected_node(node_id)
-
-        # 2. Apply Patching
+        # 5. Apply Patching
         for node_id in effects.patched_nodes:
             state.vulnerability_registry.patch_vulnerabilities(node_id)
             
-        # 3. Apply Isolation
+        # 6. Apply Isolation
         for node_id in effects.isolated_nodes:
             state.graph_manager.set_node_status(node_id, NodeStatus.ISOLATED)
             
-        # 4. Apply Privilege Resets (to USER)
+        # 7. Apply Privilege Resets (to USER)
         for node_id in effects.privilege_resets:
             state.vulnerability_registry.reset_privilege(node_id)
             
-        # 5. Apply Privilege Escalations
+        # 8. Apply Privilege Escalations
         for node_id, new_level in effects.privilege_escalations:
             state.vulnerability_registry.escalate_privilege(node_id, new_level)
             
-        # 6. Advance time
+        # 9. Advance time
         state.increment_time()
 
     def compute_rewards(self, atk_action: AttackerAction, def_action: DefenderAction, atk_success: bool, def_success: bool) -> Dict[str, float]:
