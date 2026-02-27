@@ -28,6 +28,11 @@ class TransitionEffects:
     privilege_resets: List[str] = field(default_factory=list)
     patched_nodes: List[str] = field(default_factory=list)
     isolated_nodes: List[str] = field(default_factory=list)
+    
+    # Phase 4 Epistemic updates
+    new_scans: List[str] = field(default_factory=list)
+    new_compromises: List[str] = field(default_factory=list)
+    new_detections: List[str] = field(default_factory=list)
 
 
 class DeterministicStepPipeline:
@@ -86,8 +91,14 @@ class DeterministicStepPipeline:
 
     def apply_attacker_action(self, state: SimulationState, action: AttackerAction, effects: TransitionEffects) -> Any:
         # Pass necessary data directly to exploit resolution
+        if action.action_type == ActionType.SCAN:
+            if action.target_node:
+                effects.new_scans.append(action.target_node)
+            return None
+            
         if action.action_type == ActionType.EXPLOIT:
             return action.metadata.get("vuln_id")
+            
         return None
 
     def apply_defender_action(self, state: SimulationState, action: DefenderAction, effects: TransitionEffects) -> bool:
@@ -141,29 +152,46 @@ class DeterministicStepPipeline:
         if success:
             # Stage escalation
             effects.privilege_escalations.append((target, PrivilegeLevel.ROOT))
+            # Phase 4 Epistemic: Stage compromise
+            effects.new_compromises.append(target)
+            
+            # Phase 4 Detection: If it's a monitored node or a high-value asset, defender might detect
+            node = state.graph_manager.get_node(target)
+            if node and node.metadata.get("monitored", False):
+                 effects.new_detections.append(target)
                 
         return success
 
     def update_state(self, state: SimulationState, effects: TransitionEffects) -> None:
         """Apply all staged effects to the state."""
         
-        # 1. Apply Patching
+        # 1. Apply Epistemic updates first
+        for node_id in effects.new_scans:
+            state.add_scanned_node(node_id)
+            
+        for node_id in effects.new_compromises:
+            state.add_compromised_node(node_id)
+            
+        for node_id in effects.new_detections:
+            state.add_detected_node(node_id)
+
+        # 2. Apply Patching
         for node_id in effects.patched_nodes:
             state.vulnerability_registry.patch_vulnerabilities(node_id)
             
-        # 2. Apply Isolation
+        # 3. Apply Isolation
         for node_id in effects.isolated_nodes:
             state.graph_manager.set_node_status(node_id, NodeStatus.ISOLATED)
             
-        # 3. Apply Privilege Resets (to USER)
+        # 4. Apply Privilege Resets (to USER)
         for node_id in effects.privilege_resets:
             state.vulnerability_registry.reset_privilege(node_id)
             
-        # 4. Apply Privilege Escalations
+        # 5. Apply Privilege Escalations
         for node_id, new_level in effects.privilege_escalations:
             state.vulnerability_registry.escalate_privilege(node_id, new_level)
             
-        # 5. Advance time
+        # 6. Advance time
         state.increment_time()
 
     def compute_rewards(self, atk_action: AttackerAction, def_action: DefenderAction, atk_success: bool, def_success: bool) -> Dict[str, float]:

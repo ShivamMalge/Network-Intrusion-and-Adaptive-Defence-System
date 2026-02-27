@@ -18,6 +18,7 @@ from graph.graph_manager import GraphManager
 from vulnerabilities.vulnerability_registry import VulnerabilityRegistry
 from utils.rng import CentralizedRNG
 from agents.base_agent import BaseAgent
+from observation.observation_builder import ObservationBuilder
 
 
 class BaseEnvironment(ABC):
@@ -62,6 +63,7 @@ class EnvironmentEngine(BaseEnvironment):
         super().__init__(rng)
         self._state: SimulationState = self._build_initial_state()
         self._pipeline = DeterministicStepPipeline(self.rng)
+        self._obs_builder = ObservationBuilder()
 
     def _build_initial_state(self) -> SimulationState:
         return SimulationState(GraphManager(), VulnerabilityRegistry())
@@ -71,7 +73,11 @@ class EnvironmentEngine(BaseEnvironment):
         Reinitialize the simulation and build a fresh State instance.
         """
         self._state = self._build_initial_state()
-        return self.get_observation(None)
+        # Return initial observations for generic roles
+        return {
+            "atk": self.get_observation_by_id("atk_1"),
+            "def": self.get_observation_by_id("def_1")
+        }
 
     def step(self, attacker_action: AttackerAction, defender_action: DefenderAction) -> Tuple[Dict[str, Any], Dict[str, float], bool, Dict[str, Any]]:
         """
@@ -83,32 +89,22 @@ class EnvironmentEngine(BaseEnvironment):
         rewards, done, info = self._pipeline.execute(self._state, attacker_action, defender_action)
         
         observations = {
-            attacker_action.agent_id: self.get_observation(None),
-            defender_action.agent_id: self.get_observation(None)
+            attacker_action.agent_id: self.get_observation_by_id(attacker_action.agent_id),
+            defender_action.agent_id: self.get_observation_by_id(defender_action.agent_id)
         }
 
         return observations, rewards, done, info
 
     def get_observation(self, agent: Optional[BaseAgent]) -> Dict[str, Any]:
         """
-        Generate a minimal observation describing the environment structure.
+        Generate a fog-of-war partial view of the current State for `agent`.
         """
-        # Minimal placeholder: Return topology metadata and all known vulnerabilities structurally
-        nodes = []
-        for node_id in self._state.graph_manager._nodes:
-            try:
-                vulns = self._state.vulnerability_registry.get_visible_vulnerabilities(node_id)
-                nodes.append({
-                    "node_id": node_id, 
-                    "vulns": [v.vuln_id for v in vulns]
-                })
-            except Exception:
-                pass
-                
-        return {
-            "timestep": self._state.timestamp,
-            "nodes": nodes
-        }
+        agent_id = agent.agent_id if agent else "atk_1"
+        return self.get_observation_by_id(agent_id)
+
+    def get_observation_by_id(self, agent_id: str) -> Dict[str, Any]:
+        """Helper to get observation using agent_id string directly."""
+        return self._obs_builder.build_observation(self._state, agent_id)
 
 
 if __name__ == "__main__":
@@ -117,45 +113,64 @@ if __name__ == "__main__":
     from vulnerabilities.privilege_model import PrivilegeLevel
     from core.actions import ActionType
 
-    print("--- Phase 3 Environment Self-Test ---")
+    print("--- Phase 4 Partial Observability Self-Test ---")
     
     rng = CentralizedRNG(seed=42)
     env = EnvironmentEngine(rng)
     
     # Reset first to create state
     print("\nEnvironment Reset...")
-    env.reset()
+    initial_obs = env.reset()
     
-    # Setup test scenario AFTER reset
+    # Setup test scenario: 
+    # n1 (known) -> n2 (hidden) -> n3 (critical asset, hidden)
     gm = env._state.graph_manager
     reg = env._state.vulnerability_registry
     
-    ca_node = Node("server_critical", NodeType.CRITICAL_ASSET)
-    gm.add_node(ca_node)
-    reg.register_node("server_critical")
+    # Register 3 nodes
+    gm.add_node(Node("n1", NodeType.WORKSTATION))
+    reg.register_node("n1")
     
-    # Adding visible vulnerability
-    vuln = Vulnerability(vuln_id="CVE-BASIC", severity=5.0, required_privilege=PrivilegeLevel.NONE, zero_day=False)
-    reg.add_vulnerability("server_critical", vuln)
+    # n2 is monitored (honeypot or sensor)
+    gm.add_node(Node("n2", NodeType.SERVER, metadata={"monitored": True}))
+    reg.register_node("n2")
     
-    print(f"Scenario Setup: Added {ca_node.node_id} with {vuln.vuln_id}")
+    gm.add_node(Node("n3", NodeType.CRITICAL_ASSET))
+    reg.register_node("n3")
+    
+    # Edges: n1 -> n2 -> n3
+    from graph.edge import Edge
+    gm.add_edge(Edge("n1", "n2"))
+    gm.add_edge(Edge("n2", "n3"))
 
-    # Step 1: No-ops
-    a_act = AttackerAction("atk_1", ActionType.ATTACKER_NO_OP)
+    # Attacker starts knowing n1
+    env._state.add_scanned_node("n1")
+    
+    print("\nInitial Observation (Attacker knows n1 only):")
+    atk_obs = env.get_observation_by_id("atk_1")
+    print(f"Nodes known to attacker: {[n['node_id'] for n in atk_obs['nodes']]}")
+
+    # Step 1: Attacker SCANS n2
+    print("\nStep 1: Attacker SCANS n2...")
+    a_act = AttackerAction("atk_1", ActionType.SCAN, target_node="n2")
     d_act = DefenderAction("def_1", ActionType.DEFENDER_NO_OP)
+    obs, rewards, done, info = env.step(a_act, d_act)
     
-    _, rewards, done, _ = env.step(a_act, d_act)
-    print(f"\nStep 1 (No-ops) | t: {env._state.timestamp} | rewards: {rewards} | done: {done}")
+    print(f"Nodes known to attacker after SCAN: {[n['node_id'] for n in obs['atk_1']['nodes']]}")
 
-    # Step 2: successful EXPLOIT
-    a_act = AttackerAction("atk_1", ActionType.EXPLOIT, target_node="server_critical", metadata={"vuln_id": "CVE-BASIC", "probability": 1.0})
-    d_act = DefenderAction("def_1", ActionType.DEFENDER_NO_OP)
+    # Step 2: successful EXPLOIT on n2
+    # First add a vuln so exploit is possible
+    vuln = Vulnerability(vuln_id="CVE-N2", severity=5.0, required_privilege=PrivilegeLevel.NONE, zero_day=False)
+    reg.add_vulnerability("n2", vuln)
 
-    _, rewards, done, _ = env.step(a_act, d_act)
-    print(f"\nStep 2 (Exploit) | t: {env._state.timestamp} | rewards: {rewards} | done: {done}")
+    print("\nStep 2: Attacker EXPLOITS n2...")
+    a_act = AttackerAction("atk_1", ActionType.EXPLOIT, target_node="n2", metadata={"vuln_id": "CVE-N2", "probability": 1.0})
+    obs, rewards, done, info = env.step(a_act, d_act)
     
-    try:
-        curr_priv = reg.get_privilege("server_critical")
-        print(f"Privilege of Critical Server: {curr_priv.name}")
-    except Exception as e:
-        print(f"Error fetching privilege: {e}")
+    print(f"Nodes known to attacker after EXPLOIT (should see n3 as neighbor): {[n['node_id'] for n in obs['atk_1']['nodes']]}")
+    print(f"Compromised count: {obs['atk_1']['compromised_count']}")
+
+    # Check Defender View
+    def_obs = obs["def_1"]
+    print(f"\nDefender View (All nodes seen): {[n['node_id'] for n in def_obs['nodes']]}")
+    print(f"Detections: {def_obs['detections']}")
