@@ -1,0 +1,361 @@
+# Multi-Agent Network Intrusion Simulation & Adaptive Defense System
+
+## System Architecture
+
+---
+
+## 1. High-Level Modular Architecture
+
+```mermaid
+graph TB
+    subgraph Simulation Core
+        ENV["Environment Engine"]
+        NET["Network Graph Manager"]
+        EVT["Event & Time Manager"]
+    end
+
+    subgraph Agent Layer
+        ATK["Attacker Agent(s)"]
+        DEF["Defender Agent"]
+    end
+
+    subgraph Intelligence Layer
+        PLAN["Graph Planner<br/>(Dijkstra / A* / Probabilistic)"]
+        RISK["Risk Scoring Engine"]
+        ALLOC["Resource Allocator<br/>(Min-Cut / Budget)"]
+        RL["Multi-Agent DQL Engine"]
+    end
+
+    subgraph Observation & Logging
+        OBS["Observation Builder"]
+        LOG["Audit & Replay Logger"]
+        VIZ["Visualization Module"]
+    end
+
+    ENV <--> NET
+    ENV <--> EVT
+    ENV -- observations --> OBS
+    OBS -- attacker_obs --> ATK
+    OBS -- defender_obs --> DEF
+    ATK -- actions --> ENV
+    DEF -- actions --> ENV
+    ATK -.-> PLAN
+    DEF -.-> ALLOC
+    DEF -.-> RISK
+    ATK -.-> RL
+    DEF -.-> RL
+    ENV --> LOG
+    LOG --> VIZ
+```
+
+### Module Breakdown
+
+| Module | Responsibility |
+|---|---|
+| **Environment Engine** | Steps the simulation forward, applies actions, computes rewards, manages game state |
+| **Network Graph Manager** | Maintains the dynamic graph (add/remove nodes & edges), queries topology |
+| **Event & Time Manager** | Discrete-event scheduling — topology changes, zero-day reveals, insider activations |
+| **Attacker Agent(s)** | Receives partial observations, selects exploit/move/escalate actions |
+| **Defender Agent** | Receives partial observations, allocates patches/honeypots/isolations under budget |
+| **Graph Planner** | Pathfinding (Dijkstra, A*), probabilistic exploitation chains |
+| **Risk Scoring Engine** | Per-node risk = f(criticality, exposure, vulnerability, proximity to attacker) |
+| **Resource Allocator** | Min-cut defense, budget-constrained optimization |
+| **Multi-Agent DQL Engine** | Training loop for attacker & defender policies |
+| **Observation Builder** | Constructs agent-specific partial views (fog-of-war) |
+| **Audit & Replay Logger** | Records every action/state for post-hoc analysis |
+
+---
+
+## 2. Required Simulation Components
+
+### 2.1 Network Topology Engine
+- **Dynamic graph** with runtime node/edge insertion and removal
+- **Node types**: Server, Workstation, Router, Honeypot, InsiderTerminal, CriticalAsset
+- **Edge properties**: bandwidth, latency, encrypted (bool), monitored (bool)
+- **Topology events**: link failure, new device join, subnet segmentation
+
+### 2.2 Vulnerability & Exploit System
+- Each node carries a **vulnerability set** (known + hidden zero-days)
+- Exploits have a **success probability**, **prerequisite privileges**, and **stealth cost**
+- Zero-day pool: unrevealed until a triggering event or attacker discovery
+
+### 2.3 Threat Model Components
+
+| Threat | Mechanism |
+|---|---|
+| **External Attacker** | Enters via perimeter node, must traverse graph toward critical assets |
+| **Multi-Attacker** | Multiple independent attacker agents with separate or shared objectives |
+| **Insider Threat** | Pre-positioned agent on an InsiderTerminal with elevated initial access |
+| **Zero-Day Attack** | Exploit against a vulnerability unknown to the defender's scanner |
+
+### 2.4 Defense Components
+
+| Mechanism | Effect |
+|---|---|
+| **Patch** | Removes a known vulnerability from a node (costs budget) |
+| **Honeypot Deployment** | Places a decoy node that alerts the defender on attacker interaction |
+| **Network Isolation** | Severs edges to contain a compromised subnet (costs connectivity) |
+| **IDS Alert** | Probabilistic detection on monitored edges |
+| **Privilege Reset** | Downgrades attacker privilege on a node (costs budget) |
+
+### 2.5 Observation & Fog-of-War
+- **Attacker** sees: nodes it has scanned/compromised, discovered vulnerabilities, local neighborhood
+- **Defender** sees: IDS alerts, known topology, patch status, honeypot triggers — but **NOT** the attacker's exact position unless detected
+
+---
+
+## 3. Data Structures
+
+### 3.1 Network Graph
+
+```
+NetworkGraph:
+    nodes          : Dict[NodeID, NodeState]
+    edges          : Dict[EdgeID, EdgeState]
+    adjacency      : Dict[NodeID, List[NodeID]]
+    topology_epoch : int                         # increments on structural change
+
+NodeState:
+    node_id        : str
+    node_type      : enum { SERVER, WORKSTATION, ROUTER, HONEYPOT,
+                            INSIDER_TERMINAL, CRITICAL_ASSET }
+    criticality    : float [0.0 – 1.0]           # business value
+    is_compromised : bool
+    current_owner  : enum { NONE, ATTACKER_i, DEFENDER }
+    privilege_level: enum { NONE, USER, ROOT }
+    vulnerabilities: List[Vulnerability]
+    is_patched     : Set[VulnID]                 # patched vuln IDs
+    is_honeypot    : bool
+    subnet_id      : str
+    risk_score     : float                       # computed each step
+    metadata       : Dict                        # extensible
+
+Vulnerability:
+    vuln_id         : str
+    severity        : float [0.0 – 1.0]
+    is_zero_day     : bool
+    exploit_prob    : float [0.0 – 1.0]          # base success rate
+    required_priv   : enum { NONE, USER, ROOT }
+    stealth_cost    : float                      # noise generated
+    discovery_step  : Optional[int]              # when/if revealed
+
+EdgeState:
+    edge_id     : str
+    src         : NodeID
+    dst         : NodeID
+    bandwidth   : float
+    latency     : float
+    is_encrypted: bool
+    is_monitored: bool                           # IDS active?
+    is_active   : bool                           # link up/down
+```
+
+### 3.2 Attacker State
+
+```
+AttackerState:
+    agent_id            : str
+    agent_type          : enum { EXTERNAL, INSIDER }
+    current_node        : NodeID
+    compromised_nodes   : Set[NodeID]
+    discovered_vulns    : Dict[NodeID, List[VulnID]]
+    known_topology      : partial NetworkGraph   # fog-of-war subgraph
+    privilege_map       : Dict[NodeID, PrivilegeLevel]
+    stealth_budget      : float                  # remaining stealth
+    action_history      : List[AttackerAction]
+    objective_target    : Set[NodeID]            # critical nodes to reach
+    is_detected         : bool
+    detection_count     : int
+
+AttackerAction:
+    action_type : enum { SCAN, EXPLOIT, MOVE, ESCALATE_PRIVILEGE,
+                         LATERAL_MOVE, EXFILTRATE, WAIT }
+    target_node : NodeID
+    target_vuln : Optional[VulnID]
+    timestamp   : int                            # simulation step
+    success     : bool
+    noise_generated : float
+```
+
+### 3.3 Defender State
+
+```
+DefenderState:
+    total_budget        : float
+    remaining_budget    : float
+    patched_vulns       : Dict[NodeID, Set[VulnID]]
+    honeypot_nodes      : Set[NodeID]
+    isolated_edges      : Set[EdgeID]
+    ids_alerts          : List[IDSAlert]
+    known_compromised   : Set[NodeID]            # confirmed breaches
+    suspected_nodes     : Set[NodeID]            # probabilistic suspicion
+    action_history      : List[DefenderAction]
+    detection_accuracy  : float                  # IDS true-positive rate
+    risk_map            : Dict[NodeID, float]
+
+IDSAlert:
+    alert_id    : str
+    edge_id     : EdgeID
+    timestamp   : int
+    severity    : float
+    is_true_pos : bool                           # ground truth (hidden from agent)
+
+DefenderAction:
+    action_type : enum { PATCH, DEPLOY_HONEYPOT, ISOLATE_EDGE,
+                         RESTORE_EDGE, PRIVILEGE_RESET, SCAN_NODE,
+                         REALLOCATE_IDS, NO_OP }
+    target      : NodeID | EdgeID
+    cost        : float
+    timestamp   : int
+```
+
+### 3.4 Node Attribute Summary
+
+```
+NodeAttributes (computed per step):
+    node_id            : str
+    type               : NodeType
+    criticality        : float
+    exposure           : float      # f(degree, subnet position)
+    vuln_count_known   : int
+    vuln_count_hidden  : int        # zero-days (hidden from defender)
+    privilege_held_by  : Dict[AgentID, PrivilegeLevel]
+    is_honeypot        : bool
+    is_isolated        : bool
+    shortest_path_to_critical : int # hops from nearest critical asset
+    risk_score         : float      # composite metric
+```
+
+---
+
+## 4. Interaction Pipeline
+
+```mermaid
+sequenceDiagram
+    participant ENV as Environment Engine
+    participant OBS as Observation Builder
+    participant ATK as Attacker Agent(s)
+    participant DEF as Defender Agent
+    participant NET as Network Graph
+    participant EVT as Event Manager
+    participant LOG as Logger
+
+    Note over ENV: ── Step t begins ──
+
+    ENV->>EVT: poll_events(t)
+    EVT-->>ENV: topology changes, zero-day reveals, insider triggers
+
+    ENV->>NET: apply_events(events)
+    NET-->>ENV: updated graph
+
+    ENV->>OBS: build_observations(graph, agents)
+
+    par Parallel Observation Dispatch
+        OBS-->>ATK: attacker_obs (partial graph, local vulns)
+        OBS-->>DEF: defender_obs (IDS alerts, known topology, budget)
+    end
+
+    Note over ATK: Attacker plans & selects action
+    ATK->>ENV: attacker_actions[]
+
+    Note over DEF: Defender plans & selects action
+    DEF->>ENV: defender_actions[]
+
+    ENV->>NET: apply_actions(attacker_actions, defender_actions)
+
+    NET-->>ENV: new graph state, action outcomes
+
+    ENV->>ENV: compute_rewards(attacker, defender)
+    ENV->>LOG: log(state_t, actions, rewards)
+
+    Note over ENV: ── Step t+1 ──
+```
+
+### Pipeline Phases (per simulation step)
+
+| Phase | Description |
+|---|---|
+| **1. Event Resolution** | Process scheduled events — link failures, zero-day reveals, insider activations, topology mutations |
+| **2. Observation Construction** | Build agent-specific partial observations respecting fog-of-war |
+| **3. Attacker Decision** | Each attacker selects an action (scan / exploit / move / escalate / wait) |
+| **4. Defender Decision** | Defender selects action(s) under budget constraint (patch / honeypot / isolate / scan) |
+| **5. Action Execution** | Environment applies all actions simultaneously, resolves conflicts, updates graph |
+| **6. Reward Computation** | Attacker reward: +critical nodes compromised, −detection. Defender reward: −damage, +detection, −budget spent |
+| **7. Logging & State Advance** | Full state snapshot saved; step counter increments |
+
+### Reward Signals
+
+```
+Attacker Reward:
+    + α₁ × (critical nodes newly compromised)
+    + α₂ × (privilege escalations)
+    − α₃ × (detection events)
+    − α₄ × (stealth budget consumed)
+
+Defender Reward:
+    − β₁ × (nodes compromised this step)
+    + β₂ × (attacker detections)
+    + β₃ × (attacks blocked / honeypot triggered)
+    − β₄ × (budget spent)
+    − β₅ × (connectivity lost from isolations)
+```
+
+---
+
+## 5. Planned Module Dependency Order
+
+```mermaid
+graph LR
+    A[Network Graph Manager] --> B[Event & Time Manager]
+    A --> C[Vulnerability System]
+    B --> D[Environment Engine]
+    C --> D
+    D --> E[Observation Builder]
+    E --> F[Attacker Agent]
+    E --> G[Defender Agent]
+    D --> H[Risk Scoring Engine]
+    H --> G
+    D --> I[Graph Planner]
+    I --> F
+    I --> G
+    F --> J[Multi-Agent DQL]
+    G --> J
+    D --> K[Logger / Replay]
+```
+
+> **Implementation order** (when coding begins):
+> `NetworkGraph` → `Vulnerability` → `EventManager` → `Environment` → `ObservationBuilder` → `Agents` → `Planner` → `RiskScorer` → `ResourceAllocator` → `DQL Training Loop`
+
+---
+
+## 6. File / Package Layout (Proposed)
+
+```
+network_intrusion/
+├── core/
+│   ├── network_graph.py       # NetworkGraph, NodeState, EdgeState
+│   ├── vulnerability.py       # Vulnerability, ExploitChain
+│   ├── event_manager.py       # EventManager, TopologyEvent
+│   └── environment.py         # SimulationEnvironment (step loop)
+├── agents/
+│   ├── base_agent.py          # Abstract Agent interface
+│   ├── attacker_agent.py      # AttackerState, action selection
+│   ├── defender_agent.py      # DefenderState, budget-constrained actions
+│   └── insider_agent.py       # InsiderThreat specialization
+├── planning/
+│   ├── graph_planner.py       # Dijkstra, A*, probabilistic paths
+│   ├── min_cut.py             # Min-cut defense computation
+│   └── risk_scorer.py         # Per-node risk scoring
+├── learning/
+│   ├── dql_engine.py          # Multi-Agent Deep Q-Learning
+│   ├── replay_buffer.py       # Experience replay
+│   └── reward.py              # Reward functions
+├── observation/
+│   └── observation_builder.py # Fog-of-war, partial graph construction
+├── logging/
+│   ├── audit_logger.py        # Step-by-step state logging
+│   └── replay.py              # Replay / visualization support
+├── config/
+│   └── scenarios.yaml         # Scenario definitions (topology, budgets, etc.)
+└── main.py                    # Entry point / scenario runner
+```
