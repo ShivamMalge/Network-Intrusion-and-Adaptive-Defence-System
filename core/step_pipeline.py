@@ -8,7 +8,7 @@ Responsibility boundaries:
 """
 
 from dataclasses import dataclass, field
-from typing import Tuple, Dict, Any, Optional, List
+from typing import Tuple, Dict, Any, Optional, List, Set
 
 from core.actions import AttackerAction, DefenderAction, ActionType
 from vulnerabilities.privilege_model import PrivilegeLevel
@@ -74,14 +74,27 @@ class DeterministicStepPipeline:
         info["attacker_success"] = attk_success
         info["defender_success"] = def_res
 
-        # 5. Advance - ONLY place where mutation happens
-        self.update_state(state, effects)
+        # 5. Capture context for reward shaping
+        target_node = attacker_action.target_node
+        pre_scanned = state.attacker_scanned
+        pre_priv = PrivilegeLevel.NONE
+        if target_node:
+            try:
+                pre_priv = state.vulnerability_registry.get_privilege(target_node)
+            except Exception:
+                pass
 
-        # 6. Rewards
-        rewards = self.compute_rewards(attacker_action, defender_action, attk_success, def_res)
+        # 6. Advance - ONLY place where mutation happens
+        self.update_state(state, effects)
 
         # 7. Check Terminal
         done = self.check_termination(state)
+        
+        # 8. Rewards
+        rewards = self.compute_rewards(
+            state, effects, attacker_action, defender_action, 
+            attk_success, def_res, done, pre_scanned, pre_priv
+        )
         
         if done:
             state.mark_done()
@@ -98,9 +111,15 @@ class DeterministicStepPipeline:
             if action.target_node:
                 effects.new_scans.append(action.target_node)
             return None
-            
+
         if action.action_type == ActionType.EXPLOIT:
             return action.metadata.get("vuln_id")
+            
+        if action.action_type == ActionType.MOVE_LATERAL:
+            if action.target_node:
+                # Basic move lateral stages discovery
+                effects.new_scans.append(action.target_node)
+            return True
             
         return None
 
@@ -216,18 +235,70 @@ class DeterministicStepPipeline:
         # 9. Advance time
         state.increment_time()
 
-    def compute_rewards(self, atk_action: AttackerAction, def_action: DefenderAction, atk_success: bool, def_success: bool) -> Dict[str, float]:
+    def compute_rewards(
+        self, 
+        state: SimulationState,
+        effects: TransitionEffects,
+        atk_action: AttackerAction, 
+        def_action: DefenderAction, 
+        atk_success: bool, 
+        def_success: bool,
+        done: bool,
+        pre_scanned: Set[str],
+        pre_priv: PrivilegeLevel
+    ) -> Dict[str, float]:
         rewards = {atk_action.agent_id: 0.0, def_action.agent_id: 0.0}
+        atk_id = atk_action.agent_id
 
-        # Attacker rewards
-        if atk_action.action_type == ActionType.EXPLOIT:
-            if atk_success:
-                rewards[atk_action.agent_id] += 10.0
-                rewards[def_action.agent_id] -= 5.0
-            else:
-                rewards[atk_action.agent_id] -= 1.0
+        # 1. Per-step penalty (-0.02)
+        rewards[atk_id] -= 0.02
 
-        # Defender rewards
+        # Context for discovery
+        is_new_discovery = False
+        if atk_action.target_node and atk_action.target_node not in pre_scanned:
+            is_new_discovery = True
+
+        # 2. SCAN Success Reward (+0.5 if expanded knowledge)
+        if atk_action.action_type == ActionType.SCAN and is_new_discovery:
+            rewards[atk_id] += 0.5
+
+        # 3. Successful Lateral Movement (+1.0 if access to new node)
+        if atk_action.action_type == ActionType.MOVE_LATERAL and is_new_discovery:
+            rewards[atk_id] += 1.0
+
+        # 4. Privilege Escalation
+        if atk_action.action_type == ActionType.EXPLOIT and atk_success:
+            escalation = next((new_lvl for node, new_lvl in effects.privilege_escalations if node == atk_action.target_node), None)
+            if escalation:
+                if pre_priv == PrivilegeLevel.USER and escalation == PrivilegeLevel.ADMIN:
+                    rewards[atk_id] += 2.0
+                elif pre_priv == PrivilegeLevel.ADMIN and escalation == PrivilegeLevel.ROOT:
+                    rewards[atk_id] += 3.0
+                elif pre_priv == PrivilegeLevel.USER and escalation == PrivilegeLevel.ROOT:
+                    rewards[atk_id] += 5.0 # Combined bonus
+
+        # 5. Terminal Reward (Successful CRITICAL compromise: +10.0)
+        # Check termination condition logic
+        is_critical_compromised = False
+        for node in state.graph_manager.get_all_nodes():
+            if node.node_type.name == "CRITICAL_ASSET":
+                try:
+                    if state.vulnerability_registry.get_privilege(node.node_id) == PrivilegeLevel.ROOT:
+                        is_critical_compromised = True
+                        break
+                except Exception:
+                    pass
+
+        if is_critical_compromised:
+            rewards[atk_id] += 10.0
+            rewards[def_action.agent_id] -= 5.0
+
+        # 6. Timeout Penalty (-2.0)
+        # We define timeout here as done=True but no critical compromise
+        if done and state.timestamp > 50 and not is_critical_compromised:
+            rewards[atk_id] -= 2.0
+
+        # Defender rewards (unchanged baseline)
         if def_action.action_type == ActionType.PATCH and def_success:
             rewards[def_action.agent_id] += 5.0
 
