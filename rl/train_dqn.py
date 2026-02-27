@@ -70,6 +70,8 @@ def train(
     gamma: float = 0.99,
     decay_steps: int = 10000
 ):
+    print("DEBUG: max_episodes =", max_episodes)
+    
     # 1. Setup Determinism
     torch.manual_seed(42)
     np.random.seed(42)
@@ -200,7 +202,7 @@ def train(
         if episode % 50 == 0:
             avg_reward = np.mean(last_50_rewards)
             avg_len = np.mean(last_50_lengths)
-            win_rate = (np.mean(last_50_wins) * 100)
+            win_rate = np.mean(last_50_wins) * 100
             
             print(f"Episode {episode}")
             print(f"Avg Reward (last 50): {avg_reward:.2f}")
@@ -210,11 +212,16 @@ def train(
             print(f"Replay Buffer Size: {len(replay_buffer)}")
             print("-" * 40)
 
-    # 8. Save Model
     save_path = "dqn_attacker.pt"
     torch.save(policy_net.state_dict(), save_path)
-    print(f"Training Complete. Model saved to {save_path}")
+    print(f"Training Complete. Total Episodes: {episode}. Model saved to {save_path}")
 
 
 if __name__ == "__main__":
-    train()
+    import argparse
+    parser = argparse.ArgumentParser(description="DQN Attacker Training")
+    parser.add_argument("--episodes", type=int, default=2000)
+    parser.add_argument("--steps", type=int, default=50)
+    args = parser.parse_args()
+    
+    train(max_episodes=args.episodes, max_steps=args.steps)
