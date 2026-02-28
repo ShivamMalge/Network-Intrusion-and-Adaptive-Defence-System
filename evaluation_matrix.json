@@ -1,0 +1,90 @@
+{
+    "A0": {
+        "D0": {
+            "win_rate": 83.0,
+            "avg_reward_atk": 48.042400000000015,
+            "avg_length": 48.88
+        },
+        "D1": {
+            "win_rate": 76.0,
+            "avg_reward_atk": 36.07460000000001,
+            "avg_length": 47.27
+        },
+        "D2": {
+            "win_rate": 75.0,
+            "avg_reward_atk": 50.57400000000003,
+            "avg_length": 41.05
+        },
+        "D3": {
+            "win_rate": 63.0,
+            "avg_reward_atk": 39.246,
+            "avg_length": 43.7
+        }
+    },
+    "A1": {
+        "D0": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 65.28000000000003,
+            "avg_length": 41.0
+        },
+        "D1": {
+            "win_rate": 88.0,
+            "avg_reward_atk": 40.75840000000001,
+            "avg_length": 42.08
+        },
+        "D2": {
+            "win_rate": 84.0,
+            "avg_reward_atk": 64.6534,
+            "avg_length": 38.83
+        },
+        "D3": {
+            "win_rate": 81.0,
+            "avg_reward_atk": 60.694200000000016,
+            "avg_length": 41.79
+        }
+    },
+    "A2": {
+        "D0": {
+            "win_rate": 70.0,
+            "avg_reward_atk": 35.681600000000024,
+            "avg_length": 40.92
+        },
+        "D1": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 48.95000000000002,
+            "avg_length": 37.0
+        },
+        "D2": {
+            "win_rate": 75.0,
+            "avg_reward_atk": 37.09200000000001,
+            "avg_length": 39.4
+        },
+        "D3": {
+            "win_rate": 60.0,
+            "avg_reward_atk": 39.9072,
+            "avg_length": 43.64
+        }
+    },
+    "A3": {
+        "D0": {
+            "win_rate": 98.0,
+            "avg_reward_atk": 62.12580000000002,
+            "avg_length": 48.71
+        },
+        "D1": {
+            "win_rate": 81.0,
+            "avg_reward_atk": 44.42460000000003,
+            "avg_length": 46.77
+        },
+        "D2": {
+            "win_rate": 90.0,
+            "avg_reward_atk": 66.46240000000002,
+            "avg_length": 37.88
+        },
+        "D3": {
+            "win_rate": 64.0,
+            "avg_reward_atk": 41.2178,
+            "avg_length": 42.61
+        }
+    }
+}
