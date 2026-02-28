@@ -123,6 +123,22 @@ class DeterministicStepPipeline:
             if action.target_node:
                 # Basic move lateral stages discovery
                 effects.new_scans.append(action.target_node)
+                
+                # Identify source node (the compromised neighbor we are moving from)
+                source_node = None
+                for comp_node in state.attacker_compromised:
+                    if action.target_node in state.graph_manager.get_neighbors(comp_node):
+                        source_node = comp_node
+                        break
+                        
+                if source_node:
+                    try:
+                        source_priv = state.vulnerability_registry.get_privilege(source_node)
+                        if source_priv != PrivilegeLevel.NONE:
+                            effects.privilege_escalations.append((action.target_node, source_priv))
+                    except Exception:
+                        pass
+                        
             return True
             
         return None
@@ -163,7 +179,11 @@ class DeterministicStepPipeline:
 
         target_vuln = next((v for v in vulns if v.vuln_id == vuln_id), None)
         if not target_vuln:
-            return False
+            if vuln_id == "UNKNOWN" and len(vulns) > 0:
+                target_vuln = vulns[0]
+                vuln_id = target_vuln.vuln_id
+            else:
+                return False
 
         try:
             curr_priv = state.vulnerability_registry.get_privilege(target)
@@ -174,10 +194,21 @@ class DeterministicStepPipeline:
         prob = action.metadata.get("probability", 1.0)
         exploit = Exploit(exploit_id="EXP-DYNAMIC", target_vuln_id=vuln_id, base_success_probability=prob, stealth_cost=0.0)
 
+        print("Attempting exploit on", target, 
+              "current_priv:", curr_priv.name,
+              "required:", target_vuln.required_privilege.name)
+
         success = exploit.attempt(curr_priv, target_vuln, self._rng)
         if success:
             # Stage escalation
-            effects.privilege_escalations.append((target, PrivilegeLevel.ROOT))
+            if curr_priv == PrivilegeLevel.USER:
+                effects.privilege_escalations.append((target, PrivilegeLevel.ADMIN))
+            elif curr_priv == PrivilegeLevel.ADMIN:
+                effects.privilege_escalations.append((target, PrivilegeLevel.ROOT))
+            elif curr_priv == PrivilegeLevel.NONE:
+                # Assuming initial exploit grants USER
+                effects.privilege_escalations.append((target, PrivilegeLevel.USER))
+                
             # Phase 4 Epistemic: Stage compromise
             effects.new_compromises.append(target)
             
@@ -234,7 +265,10 @@ class DeterministicStepPipeline:
             
         # 8. Apply Privilege Escalations
         for node_id, new_level in effects.privilege_escalations:
-            state.vulnerability_registry.escalate_privilege(node_id, new_level)
+            try:
+                state.vulnerability_registry.escalate_privilege(node_id, new_level)
+            except Exception:
+                pass
 
 
     def compute_rewards(
@@ -261,37 +295,62 @@ class DeterministicStepPipeline:
         if atk_action.target_node and atk_action.target_node not in pre_scanned:
             is_new_discovery = True
 
-        # 2. SCAN Success Reward (+0.5 if expanded knowledge)
+        # 2. SCAN Success Reward (+1.5 if expanded knowledge)
         if atk_action.action_type == ActionType.SCAN and is_new_discovery:
-            rewards[atk_id] += 0.5
+            rewards[atk_id] += 1.5
 
-        # 3. Successful Lateral Movement (+1.0 if access to new node)
+        # 3. Successful Lateral Movement (+3.0 if access to new node)
         if atk_action.action_type == ActionType.MOVE_LATERAL and is_new_discovery:
-            rewards[atk_id] += 1.0
+            rewards[atk_id] += 3.0
 
         # 4. Privilege Escalation
         if atk_action.action_type == ActionType.EXPLOIT and atk_success:
             escalation = next((new_lvl for node, new_lvl in effects.privilege_escalations if node == atk_action.target_node), None)
             if escalation:
                 if pre_priv == PrivilegeLevel.USER and escalation == PrivilegeLevel.ADMIN:
-                    rewards[atk_id] += 2.0
+                    rewards[atk_id] += 5.0
                 elif pre_priv == PrivilegeLevel.ADMIN and escalation == PrivilegeLevel.ROOT:
-                    rewards[atk_id] += 3.0
+                    rewards[atk_id] += 8.0
                 elif pre_priv == PrivilegeLevel.USER and escalation == PrivilegeLevel.ROOT:
-                    rewards[atk_id] += 5.0 # Combined bonus
+                    rewards[atk_id] += 10.0 # Combined bonus
 
-        # 5. Terminal Reward (Successful CRITICAL compromise: +10.0)
+        # 5. Terminal Reward (Successful CRITICAL compromise: +25.0)
         if termination_reason == "CRITICAL_COMPROMISED":
-            rewards[atk_id] += 10.0
+            rewards[atk_id] += 25.0
             rewards[def_action.agent_id] -= 5.0
 
-        # 6. Timeout Penalty (-2.0)
+        # 6. Timeout Penalty (-1.0)
         if termination_reason == "TIMEOUT":
-            rewards[atk_id] -= 2.0
+            rewards[atk_id] -= 1.0
 
-        # Defender rewards (unchanged baseline)
+        # Defender rewards (Phase 6B Shaping)
+        def_id = def_action.agent_id
+        
+        # 7. Defender per-step penalty
+        rewards[def_id] -= 0.02
+        
+        # 8. Defender PATCH reward
         if def_action.action_type == ActionType.PATCH and def_success:
-            rewards[def_action.agent_id] += 5.0
+            rewards[def_id] += 5.0
+            
+        # 9. Defender ISOLATE reward (only if node was compromised before isolate)
+        if def_action.action_type == ActionType.ISOLATE and def_success:
+            if def_action.target_node in state.attacker_compromised:
+                rewards[def_id] += 8.0
+                
+        # 10. Defender Detection reward (if any detections actually triggered this step)
+        # We can check if new_detections were added to the state this step by seeing if any of the effects triggered
+        # However, detections are queued and pop at horizon_time. 
+        # A simpler way is to check if the state's detected nodes set grew, but we didn't snapshot the pre-set.
+        # Alternatively, we know detections trigger when queue pops.
+        horizon_time = state.timestamp + 1
+        triggered = [n for n, t in state._detection_queue if t <= horizon_time]
+        if triggered:
+             rewards[def_id] += 3.0
+             
+        # Terminal Penalty for defender
+        if termination_reason == "CRITICAL_COMPROMISED":
+            rewards[def_id] -= 25.0
 
         return rewards
 

@@ -66,9 +66,10 @@ class ObservationBuilder:
                     node_data["status"] = "COMPROMISED"
                 elif node_id in scanned:
                     node_data["node_type"] = node.node_type.name
-                    node_data["status"] = "KNOWN"
+                    node_data["status"] = "DISCOVERED"
                 else:
-                    node_data["status"] = "DISCOVERED" # Neighbor of compromised
+                    node_data["status"] = "DISCOVERED" # Neighbor of a compromised node
+
 
             # Visible vulnerabilities
             try:

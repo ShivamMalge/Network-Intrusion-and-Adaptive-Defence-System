@@ -1,11 +1,12 @@
 """
-DQN Training Loop Phase 6A.4.
+DQN Training Loop Phase 6B.
+Defender vs Fixed GreedyAttacker.
 
 Responsibility boundaries:
-- Orchestrates the training process for the DQN Attacker.
-- Integrates Gym Wrapper, Q-Network, Replay Buffer, and Scheduler.
-- Implements the standard DQN backpropagation and target network synchronization.
-- Saves the trained model states.
+- Orchestrates the training process for the DQN Defender.
+- Integrates DefenderGymWrapper, Q-Network, Replay Buffer, and Scheduler.
+- Implements masked Q-learning for the defender.
+- Saves the trained defender model states.
 """
 
 import os
@@ -21,30 +22,25 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.environment import EnvironmentEngine
 from utils.rng import CentralizedRNG
-from agents.greedy_defender import GreedyDefender
+from agents.greedy_attacker import GreedyAttacker
 from encoding.state_encoder import StateEncoder
 from encoding.action_encoder import ActionEncoder
-from rl.gym_wrapper import CyberAttackEnv
+from rl.defender_gym_wrapper import DefenderEnv
 from rl.q_network import QNetwork
 from rl.replay_buffer import ReplayBuffer, EpsilonScheduler
-from graph.node import Node, NodeType
-from graph.edge import Edge
-from vulnerabilities.vulnerability import Vulnerability
-from vulnerabilities.privilege_model import PrivilegeLevel
 
 
-
-def train(
-    max_episodes: int = 2000,
+def train_defender(
+    max_episodes: int = 1000,
     max_steps: int = 50,
     train_start_threshold: int = 1000,
     batch_size: int = 64,
     target_update_freq: int = 1000,
     lr: float = 1e-3,
     gamma: float = 0.99,
-    decay_steps: int = 50000
+    decay_steps: int = 40000
 ):
-    print("DEBUG: max_episodes =", max_episodes)
+    print(f"Starting Defender DQN Training (Episodes: {max_episodes})")
     
     # 1. Setup Determinism
     torch.manual_seed(42)
@@ -57,17 +53,17 @@ def train(
     
     state_enc = StateEncoder(max_nodes=max_nodes)
     act_enc = ActionEncoder(max_nodes=max_nodes)
-    defender = GreedyDefender("def_1")
+    attacker = GreedyAttacker("atk_1")
     
-    env = CyberAttackEnv(
+    env = DefenderEnv(
         base_env=base_env,
         state_encoder=state_enc,
         action_encoder=act_enc,
-        defender_policy=defender,
+        attacker_policy=attacker,
         max_steps=max_steps
     )
     
-    # 3. Hyperparameters (Local override from arguments)
+    # 3. Hyperparameters
     state_dim = state_enc.observation_dim
     action_dim = act_enc.action_dim
     hidden_dim = 256
@@ -90,15 +86,12 @@ def train(
     # 5. Training Loop
     global_step = 0
     
-    # Rolling Statistics
+    # Rolling Statistics (last 50 episodes)
     last_50_rewards = deque(maxlen=50)
     last_50_lengths = deque(maxlen=50)
-    last_50_wins = deque(maxlen=50)
-    
-    print("Starting DQN Training...")
+    last_50_successes = deque(maxlen=50) # Non-compromised episodes
     
     for episode in range(1, max_episodes + 1):
-        # Reset environment
         state, info = env.reset()
         mask = info["action_mask"]
         episode_reward = 0
@@ -112,16 +105,16 @@ def train(
             epsilon = epsilon_scheduler.value(global_step)
             state_tensor = torch.from_numpy(state).float().unsqueeze(0)
             
-            action = policy_net.select_action(state_tensor, mask_tensor, epsilon, device)
+            # QNetwork.select_action handles the masking
+            action_idx = policy_net.select_action(state_tensor, mask_tensor, epsilon, device)
             
             # Step Environment
-            next_state, reward, terminated, truncated, info = env.step(action)
+            next_state, reward, terminated, truncated, info = env.step(action_idx)
             done = terminated or truncated
             next_mask = info["action_mask"]
-            print("Next mask sum:", next_mask.sum())
             
             # Save Experience
-            replay_buffer.add(state, action, reward, next_state, next_mask, done)
+            replay_buffer.add(state, action_idx, reward, next_state, next_mask, done)
             
             state = next_state
             mask = next_mask
@@ -137,7 +130,7 @@ def train(
                 q_values = policy_net(b_states)
                 current_q = q_values.gather(1, b_actions.unsqueeze(1)).squeeze()
                 
-                # Target: r + gamma * max Q'(s', a')
+                # Target: r + gamma * max Q'(s', a') with masking
                 with torch.no_grad():
                     next_q_values = target_net(b_next_states)
                     masked_next_q = next_q_values.clone()
@@ -158,36 +151,31 @@ def train(
             if global_step % target_update_freq == 0:
                 target_net.load_state_dict(policy_net.state_dict())
                 
-        # Record Win condition
-        win = 1 if info.get("termination_reason") == "CRITICAL_COMPROMISED" else 0
-        last_50_wins.append(win)
-                
+        # Record Success condition (Defender perspective)
+        # Success = Not CRITICAL_COMPROMISED
+        reason = info.get("termination_reason", "TIMEOUT")
+        success = 1 if reason != "CRITICAL_COMPROMISED" else 0
+        last_50_successes.append(success)
+        
         last_50_rewards.append(episode_reward)
         last_50_lengths.append(episode_steps)
         
         if episode % 50 == 0:
             avg_reward = np.mean(last_50_rewards)
             avg_len = np.mean(last_50_lengths)
-            win_rate = np.mean(last_50_wins) * 100
+            success_rate = np.mean(last_50_successes) * 100
             
-            print(f"Episode {episode}")
-            print(f"Avg Reward (last 50): {avg_reward:.2f}")
-            print(f"Win Rate (last 50): {win_rate:.0f}%")
-            print(f"Avg Episode Length (last 50): {avg_len:.1f}")
-            print(f"Epsilon: {epsilon:.3f}")
-            print(f"Replay Buffer Size: {len(replay_buffer)}")
-            print("-" * 40)
+            print(f"Episode {episode} | Avg Reward: {avg_reward:.2f} | Success Rate: {success_rate:.1f}% | Avg Len: {avg_len:.1f} | Epsilon: {epsilon:.3f}")
 
-    save_path = "dqn_attacker.pt"
+    save_path = "dqn_defender.pt"
     torch.save(policy_net.state_dict(), save_path)
-    print(f"Training Complete. Total Episodes: {episode}. Model saved to {save_path}")
+    print(f"Training Complete. Model saved to {save_path}")
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="DQN Attacker Training")
-    parser.add_argument("--episodes", type=int, default=2000)
-    parser.add_argument("--steps", type=int, default=50)
+    parser = argparse.ArgumentParser(description="Defender DQN Training")
+    parser.add_argument("--episodes", type=int, default=1000)
     args = parser.parse_args()
     
-    train(max_episodes=args.episodes, max_steps=args.steps)
+    train_defender(max_episodes=args.episodes)

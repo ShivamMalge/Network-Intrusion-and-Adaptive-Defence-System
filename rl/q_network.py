@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
+import numpy as np
 from typing import Optional
 
 
@@ -48,45 +49,27 @@ class QNetwork(nn.Module):
         x = F.relu(self.fc2(x))
         return self.fc3(x)
 
-    def select_action(
-        self, 
-        state: torch.Tensor, 
-        action_mask: torch.Tensor, 
-        epsilon: float, 
-        device: torch.device
-    ) -> int:
+    def select_action(self, state, mask, epsilon, device):
         """
-        Performs masked epsilon-greedy action selection.
+        state: (1, state_dim)
+        mask: (action_dim,) float tensor (1.0 valid, 0.0 invalid)
+        """
         
-        Args:
-            state: Tensor of shape (1, state_dim)
-            action_mask: Binary tensor of shape (action_dim,)
-            epsilon: Exploration rate in [0, 1]
-            device: Device to run computation on
+        mask = mask.to(device)
+        
+        # Exploration
+        if np.random.rand() < epsilon:
+            valid_actions = torch.where(mask == 1.0)[0]
+            if len(valid_actions) == 0:
+                return 0  # safety fallback
+            idx = torch.randint(0, len(valid_actions), (1,))
+            return valid_actions[idx].item()
             
-        Returns:
-            The selected discrete action index.
-        """
-        # 1. Epsilon-greedy exploration
-        if random.random() < epsilon:
-            # Pick a random valid action
-            valid_indices = torch.where(action_mask > 0)[0].tolist()
-            if not valid_indices:
-                # Fallback to absolute last index (NO_OP) if no mask provided
-                return self.action_dim - 1
-            return random.choice(valid_indices)
-            
-        # 2. Greedy selection
-        self.eval()
+        # Exploitation
         with torch.no_grad():
-            q_values = self.forward(state.to(device))
+            q_values = self.forward(state).squeeze(0)
             
-            # Apply masking: Set invalid actions to a very low value
-            masked_q = q_values.clone().squeeze(0)
-            masked_q[action_mask.to(device) == 0] = -1e9
+            masked_q = q_values.clone()
+            masked_q[mask == 0] = -1e9
             
-            # Select max index
-            action_idx = torch.argmax(masked_q).item()
-            
-        self.train()
-        return int(action_idx)
+            return torch.argmax(masked_q).item()

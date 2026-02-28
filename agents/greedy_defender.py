@@ -28,17 +28,17 @@ class GreedyDefender(BaseAgent):
 
         # Priority 1: ISOLATE detected threats
         detections = observation.get("detections", [])
-        if detections:
+        if detections and __import__("random").random() < 0.6:
             # Pick the first detection and isolate it
             target = detections[0]
             # Verify node exists in observation to be safe
             if any(n["node_id"] == target for n in nodes):
                  return DefenderAction(self.agent_id, ActionType.ISOLATE, target_node=target)
 
-        # Priority 2: PATCH visible vulnerabilities (ordered by severity if available)
-        # For Phase 5A, we just pick the first node with vulns
+        # Priority 2: PATCH visible vulnerabilities only if detected or randomly with low probability
+        # For Phase 5A, we just pick the first node with vulns that is detected
         for node in nodes:
-            if node.get("vulnerabilities"):
+            if node.get("vulnerabilities") and node.get("detected_threat"):
                 return DefenderAction(self.agent_id, ActionType.PATCH, target_node=node["node_id"])
 
         # Default: NO_OP

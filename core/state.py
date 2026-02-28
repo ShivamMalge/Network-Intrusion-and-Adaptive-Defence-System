@@ -55,7 +55,7 @@ class SimulationState(BaseState):
         
         # Phase 5B Stochastic Detection state
         self._detection_queue: List[Tuple[str, int]] = []
-        self._detection_probability = 0.7  # Defaults
+        self._detection_probability = 0.25  # Lowered structured collapse prob
         self._detection_delay = 2
         self._false_positive_rate = 0.05
 

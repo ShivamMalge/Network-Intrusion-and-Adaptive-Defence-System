@@ -73,10 +73,49 @@ class EnvironmentEngine(BaseEnvironment):
         Reinitialize the simulation and build a fresh State instance.
         """
         self._state = self._build_initial_state()
+        
+        # 1. Recreate GraphManager and VulnerabilityRegistry is done via _build_initial_state
+        gm = self._state.graph_manager
+        reg = self._state.vulnerability_registry
+        
+        # We need these imports for node and vulnerability setup internally
+        from graph.node import Node, NodeType
+        from graph.edge import Edge
+        from vulnerabilities.vulnerability import Vulnerability
+        from vulnerabilities.privilege_model import PrivilegeLevel
+
+        # 2. Add nodes
+        gm.add_node(Node("dmz", NodeType.WORKSTATION))
+        reg.register_node("dmz")
+        
+        gm.add_node(Node("internal", NodeType.SERVER))
+        reg.register_node("internal")
+        
+        gm.add_node(Node("data", NodeType.CRITICAL_ASSET))
+        reg.register_node("data")
+
+        # 3. Add vulnerabilities
+        reg.add_vulnerability("dmz", Vulnerability(
+            vuln_id="ENTRY-BOOTSTRAP", severity=5.0, required_privilege=PrivilegeLevel.NONE, zero_day=False
+        ))
+        reg.add_vulnerability("internal", Vulnerability(
+            vuln_id="INTERNAL-VULN", severity=7.0, required_privilege=PrivilegeLevel.USER, zero_day=False
+        ))
+        reg.add_vulnerability("data", Vulnerability(
+            vuln_id="DATA-VULN", severity=10.0, required_privilege=PrivilegeLevel.ADMIN, zero_day=False
+        ))
+
+        # 4. Add edges
+        gm.add_edge(Edge("dmz", "internal"))
+        gm.add_edge(Edge("internal", "data"))
+
+        # 5. Initialize attacker knowledge
+        self._state.add_scanned_node("dmz")
+
         # Return initial observations for generic roles
         return {
-            "atk": self.get_observation_by_id("atk_1"),
-            "def": self.get_observation_by_id("def_1")
+            "atk_1": self.get_observation_by_id("atk_1"),
+            "def_1": self.get_observation_by_id("def_1")
         }
 
     def step(self, attacker_action: AttackerAction, defender_action: DefenderAction) -> Tuple[Dict[str, Any], Dict[str, float], bool, Dict[str, Any]]:

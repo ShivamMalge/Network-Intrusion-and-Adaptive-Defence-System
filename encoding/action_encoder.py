@@ -102,8 +102,8 @@ class ActionEncoder:
                 if node_data.get("status") != "COMPROMISED":
                     mask[self.all_types.index(ActionType.SCAN) * self.max_nodes + i] = 1.0
                 
-                # EXPLOIT: Valid if node has visible vulnerabilities and is not compromised
-                if len(node_data.get("vulnerabilities", [])) > 0 and node_data.get("status") != "COMPROMISED":
+                # EXPLOIT: Valid if node has visible vulnerabilities (scanned/compromised have vulns populated if visible)
+                if len(node_data.get("vulnerabilities", [])) > 0:
                     mask[self.all_types.index(ActionType.EXPLOIT) * self.max_nodes + i] = 1.0
                     
                 # MOVE_LATERAL: Valid if node is a neighbor of a compromised node (DISCOVERED status)

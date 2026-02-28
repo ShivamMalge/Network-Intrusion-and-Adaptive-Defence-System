@@ -9,3 +9,11 @@ ENV/
 .vscode/
 *.swp
 *.swo
+
+# DQN Models
+*_cycle_*.pt
+dqn_attacker.pt
+dqn_defender.pt
+
+# Metics
+selfplay_metrics.json

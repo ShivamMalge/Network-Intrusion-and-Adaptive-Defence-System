@@ -86,8 +86,14 @@ class CyberAttackEnv(gym.Env):
         atk_obs = self.base_env.get_observation_by_id(self.attacker_id)
         encoded_state = self.state_encoder.encode(atk_obs, "attacker")
         
-        return encoded_state, {}
-
+        # 3. Generate initial action mask
+        action_mask = self.action_encoder.generate_action_mask(atk_obs, "attacker")
+        
+        info = {
+            "action_mask": action_mask
+        }
+        
+        return encoded_state, info
     def step(self, action_index: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """
         Advances the environment by one step.
