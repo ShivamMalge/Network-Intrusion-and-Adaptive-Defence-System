@@ -99,23 +99,20 @@ def main(episodes_per_pair=100):
     action_dim = act_enc.action_dim
     hidden_dim = 256
     
-    # Checkpoint maps
-    atk_checkpoints = {
-        "A0": "dqn_attacker.pt",
-        "A1": "dqn_attacker_cycle_1.pt",
-        "A2": "dqn_attacker_cycle_2.pt",
-        "A3": "dqn_attacker_cycle_3.pt"
-    }
-    def_checkpoints = {
-        "D0": "dqn_defender.pt",
-        "D1": "dqn_defender_cycle_1.pt",
-        "D2": "dqn_defender_cycle_2.pt",
-        "D3": "dqn_defender_cycle_3.pt"
-    }
+    # Dynamic checkpoint discovery
+    atk_checkpoints = {"A0": "dqn_attacker.pt"}
+    def_checkpoints = {"D0": "dqn_defender.pt"}
     
-    # Filter to only existing checkpoints
-    atk_checkpoints = {k: v for k, v in atk_checkpoints.items() if os.path.exists(v)}
-    def_checkpoints = {k: v for k, v in def_checkpoints.items() if os.path.exists(v)}
+    # Scan for cycle checkpoints
+    for i in range(1, 100):
+        a_path = f"dqn_attacker_cycle_{i}.pt"
+        d_path = f"dqn_defender_cycle_{i}.pt"
+        if os.path.exists(a_path):
+            atk_checkpoints[f"A{i}"] = a_path
+        if os.path.exists(d_path):
+            def_checkpoints[f"D{i}"] = d_path
+        if not os.path.exists(a_path) and not os.path.exists(d_path) and i > 5:
+            break
     
     print(f"Starting Cross-Checkpoint Evaluation Matrix ({episodes_per_pair} episodes/pair)")
     print(f"Attackers: {list(atk_checkpoints.keys())}")

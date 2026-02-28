@@ -99,7 +99,7 @@ def evaluate(base_env, attacker_policy, defender_policy, episodes=100):
         "avg_length": np.mean(lengths)
     }
 
-def train_phase(env, policy_net, target_net, episodes, device, lr=5e-4, gamma=0.99, batch_size=64):
+def train_phase(env, policy_net, target_net, episodes, device, lr=5e-4, gamma=0.99, batch_size=64, eps_end=0.05):
     """Generic training loop for one agent against a frozen opponent."""
     # Reset Optimization State for each phase
     policy_net.train()
@@ -108,7 +108,7 @@ def train_phase(env, policy_net, target_net, episodes, device, lr=5e-4, gamma=0.
     
     optimizer = optim.Adam(policy_net.parameters(), lr=lr)
     buffer = ReplayBuffer(50000, policy_net.state_dim, policy_net.action_dim, device)
-    scheduler = EpsilonScheduler(start=0.3, end=0.05, decay_steps=episodes * 20)
+    scheduler = EpsilonScheduler(start=0.3, end=eps_end, decay_steps=episodes * 20)
     
     global_step = 0
     target_update_freq = 500
@@ -163,7 +163,7 @@ def train_phase(env, policy_net, target_net, episodes, device, lr=5e-4, gamma=0.
             if global_step % target_update_freq == 0:
                 target_net.load_state_dict(policy_net.state_dict())
 
-def run_self_play(max_cycles=3, episodes_per_phase=300):
+def run_self_play(start_cycle=1, end_cycle=3, episodes_per_phase=300, lr=5e-4, eps_end=0.05):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     max_nodes = 32
     state_enc = StateEncoder(max_nodes=max_nodes)
@@ -173,14 +173,28 @@ def run_self_play(max_cycles=3, episodes_per_phase=300):
     hidden_dim = 256
     
     # 1. Models
-    print("Loading initial checkpoints...")
     atk_policy = QNetwork(state_dim, action_dim, hidden_dim).to(device)
     atk_target = QNetwork(state_dim, action_dim, hidden_dim).to(device)
-    atk_policy.load_state_dict(torch.load("dqn_attacker.pt", map_location=device))
-    
     def_policy = QNetwork(state_dim, action_dim, hidden_dim).to(device)
     def_target = QNetwork(state_dim, action_dim, hidden_dim).to(device)
-    def_policy.load_state_dict(torch.load("dqn_defender.pt", map_location=device))
+
+    # Load starting checkpoints
+    if start_cycle == 1:
+        print("Loading initial baseline checkpoints...")
+        atk_policy.load_state_dict(torch.load("dqn_attacker.pt", map_location=device))
+        def_policy.load_state_dict(torch.load("dqn_defender.pt", map_location=device))
+        metrics = []
+    else:
+        prev_cycle = start_cycle - 1
+        print(f"Resuming from Cycle {prev_cycle} checkpoints...")
+        atk_policy.load_state_dict(torch.load(f"dqn_attacker_cycle_{prev_cycle}.pt", map_location=device))
+        def_policy.load_state_dict(torch.load(f"dqn_defender_cycle_{prev_cycle}.pt", map_location=device))
+        
+        if os.path.exists("selfplay_metrics.json"):
+            with open("selfplay_metrics.json", "r") as f:
+                metrics = json.load(f)
+        else:
+            metrics = []
     
     rng = CentralizedRNG(seed=42)
     base_env = EnvironmentEngine(rng)
@@ -189,27 +203,27 @@ def run_self_play(max_cycles=3, episodes_per_phase=300):
     atk_fixed_policy = DQNAgent(atk_policy, act_enc, "attacker")
     def_fixed_policy = DQNAgent(def_policy, act_enc, "defender")
     
-    metrics = []
     
-    # 2. Stage A: Baseline
-    print("\nStage A: Baseline Evaluation")
-    baseline = evaluate(base_env, atk_fixed_policy, def_fixed_policy, episodes=100)
-    print(f"Baseline -> Win Rate: {baseline['win_rate']:.1f}%, Avg Len: {baseline['avg_length']:.1f}")
-    metrics.append({"cycle": 0, "stage": "baseline", **baseline})
+    # 2. Stage A: Baseline (only if cycle 1)
+    if start_cycle == 1:
+        print("\nStage A: Baseline Evaluation")
+        baseline = evaluate(base_env, atk_fixed_policy, def_fixed_policy, episodes=100)
+        print(f"Baseline -> Win Rate: {baseline['win_rate']:.1f}%, Avg Len: {baseline['avg_length']:.1f}")
+        metrics.append({"cycle": 0, "stage": "baseline", **baseline})
     
     # 3. Stage B: Cycles
-    for cycle in range(1, max_cycles + 1):
+    for cycle in range(start_cycle, end_cycle + 1):
         print(f"\n--- Cycle {cycle} ---")
         
         # Attacker Train Phase
         print(f"Cycle {cycle} Phase 1: Training Attacker...")
         atk_env = CyberAttackEnv(base_env, state_enc, act_enc, def_fixed_policy)
-        train_phase(atk_env, atk_policy, atk_target, episodes_per_phase, device)
+        train_phase(atk_env, atk_policy, atk_target, episodes_per_phase, device, lr=lr, eps_end=eps_end)
         
         # Defender Train Phase
         print(f"Cycle {cycle} Phase 2: Training Defender...")
         def_env = DefenderEnv(base_env, state_enc, act_enc, atk_fixed_policy)
-        train_phase(def_env, def_policy, def_target, episodes_per_phase, device)
+        train_phase(def_env, def_policy, def_target, episodes_per_phase, device, lr=lr, eps_end=eps_end)
         
         # End of Cycle Eval
         print(f"Cycle {cycle} Evaluation...")
@@ -221,19 +235,28 @@ def run_self_play(max_cycles=3, episodes_per_phase=300):
         torch.save(atk_policy.state_dict(), f"dqn_attacker_cycle_{cycle}.pt")
         torch.save(def_policy.state_dict(), f"dqn_defender_cycle_{cycle}.pt")
 
-    # Final save
-    torch.save(atk_policy.state_dict(), "dqn_attacker_selfplay.pt")
-    torch.save(def_policy.state_dict(), "dqn_defender_selfplay.pt")
-    
-    with open("selfplay_metrics.json", "w") as f:
-        json.dump(metrics, f, indent=4)
-    print("\nTraining Complete. Metrics saved to selfplay_metrics.json")
+        # Save latest models
+        torch.save(atk_policy.state_dict(), "dqn_attacker_selfplay.pt")
+        torch.save(def_policy.state_dict(), "dqn_defender_selfplay.pt")
+        
+        with open("selfplay_metrics.json", "w") as f:
+            json.dump(metrics, f, indent=4)
+        print(f"Cycle {cycle} complete. Metrics saved.")
+
+    print("\nTraining Complete.")
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cycles", type=int, default=3)
+    parser.add_argument("--start-cycle", type=int, default=1)
+    parser.add_argument("--end-cycle", type=int, default=3)
     parser.add_argument("--episodes", type=int, default=300)
+    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--eps-end", type=float, default=0.05)
     args = parser.parse_args()
     
-    run_self_play(max_cycles=args.cycles, episodes_per_phase=args.episodes)
+    run_self_play(start_cycle=args.start_cycle, 
+                  end_cycle=args.end_cycle, 
+                  episodes_per_phase=args.episodes,
+                  lr=args.lr,
+                  eps_end=args.eps_end)
