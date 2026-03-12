@@ -1,0 +1,11 @@
+{
+    "episodes": 1000,
+    "win_rate": 0.0,
+    "avg_length": 50.0,
+    "avg_reward": 55.38999999999997,
+    "reward_std": 15.645251675828058,
+    "length_std": 0.0,
+    "max_win_streak": 0,
+    "max_loss_streak": 1000,
+    "verdict": "SHIFTED (Defender Improved)"
+}

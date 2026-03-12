@@ -29,6 +29,7 @@ from rl.gym_wrapper import CyberAttackEnv
 from rl.defender_gym_wrapper import DefenderEnv
 from rl.q_network import QNetwork
 from rl.replay_buffer import ReplayBuffer, EpsilonScheduler
+from rl.population_manager import PopulationManager
 
 class DQNAgent:
     """A wrapper to use a Q-Network as a fixed policy for the opponent."""
@@ -163,7 +164,7 @@ def train_phase(env, policy_net, target_net, episodes, device, lr=5e-4, gamma=0.
             if global_step % target_update_freq == 0:
                 target_net.load_state_dict(policy_net.state_dict())
 
-def run_self_play(start_cycle=1, end_cycle=3, episodes_per_phase=300, lr=5e-4, eps_end=0.05):
+def run_self_play(start_cycle=1, end_cycle=3, episodes_per_phase=300, lr=5e-4, eps_end=0.05, pbt=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     max_nodes = 32
     state_enc = StateEncoder(max_nodes=max_nodes)
@@ -196,6 +197,10 @@ def run_self_play(start_cycle=1, end_cycle=3, episodes_per_phase=300, lr=5e-4, e
         else:
             metrics = []
     
+    # 1.1 Population Manager
+    pop_manager = PopulationManager(pool_size=3)
+    pop_manager.load_existing() # Detect A0-A5, D0-D5
+    
     rng = CentralizedRNG(seed=42)
     base_env = EnvironmentEngine(rng)
     
@@ -213,16 +218,34 @@ def run_self_play(start_cycle=1, end_cycle=3, episodes_per_phase=300, lr=5e-4, e
     
     # 3. Stage B: Cycles
     for cycle in range(start_cycle, end_cycle + 1):
-        print(f"\n--- Cycle {cycle} ---")
+        print(f"\n--- Cycle {cycle} --- {'(PBT Mode)' if pbt else ''}")
         
         # Attacker Train Phase
         print(f"Cycle {cycle} Phase 1: Training Attacker...")
-        atk_env = CyberAttackEnv(base_env, state_enc, act_enc, def_fixed_policy)
+        if pbt:
+            opp_def_path = pop_manager.get_random_defender()
+            print(f"  PBT: Sampling opponent defender from pool: {os.path.basename(opp_def_path)}")
+            opp_def_model = QNetwork(state_dim, action_dim, hidden_dim).to(device)
+            opp_def_model.load_state_dict(torch.load(opp_def_path, map_location=device))
+            opp_def_agent = DQNAgent(opp_def_model, act_enc, "defender")
+            atk_env = CyberAttackEnv(base_env, state_enc, act_enc, opp_def_agent)
+        else:
+            atk_env = CyberAttackEnv(base_env, state_enc, act_enc, def_fixed_policy)
+            
         train_phase(atk_env, atk_policy, atk_target, episodes_per_phase, device, lr=lr, eps_end=eps_end)
         
         # Defender Train Phase
         print(f"Cycle {cycle} Phase 2: Training Defender...")
-        def_env = DefenderEnv(base_env, state_enc, act_enc, atk_fixed_policy)
+        if pbt:
+            opp_atk_path = pop_manager.get_random_attacker()
+            print(f"  PBT: Sampling opponent attacker from pool: {os.path.basename(opp_atk_path)}")
+            opp_atk_model = QNetwork(state_dim, action_dim, hidden_dim).to(device)
+            opp_atk_model.load_state_dict(torch.load(opp_atk_path, map_location=device))
+            opp_atk_agent = DQNAgent(opp_atk_model, act_enc, "attacker")
+            def_env = DefenderEnv(base_env, state_enc, act_enc, opp_atk_agent)
+        else:
+            def_env = DefenderEnv(base_env, state_enc, act_enc, atk_fixed_policy)
+            
         train_phase(def_env, def_policy, def_target, episodes_per_phase, device, lr=lr, eps_end=eps_end)
         
         # End of Cycle Eval
@@ -232,8 +255,14 @@ def run_self_play(start_cycle=1, end_cycle=3, episodes_per_phase=300, lr=5e-4, e
         metrics.append({"cycle": cycle, "stage": "self-play", **result})
         
         # Save checkpoints
-        torch.save(atk_policy.state_dict(), f"dqn_attacker_cycle_{cycle}.pt")
-        torch.save(def_policy.state_dict(), f"dqn_defender_cycle_{cycle}.pt")
+        atk_save_path = f"dqn_attacker_cycle_{cycle}.pt"
+        def_save_path = f"dqn_defender_cycle_{cycle}.pt"
+        torch.save(atk_policy.state_dict(), atk_save_path)
+        torch.save(def_policy.state_dict(), def_save_path)
+        
+        # Update Population Manager
+        pop_manager.add_attacker(atk_save_path)
+        pop_manager.add_defender(def_save_path)
 
         # Save latest models
         torch.save(atk_policy.state_dict(), "dqn_attacker_selfplay.pt")
@@ -253,10 +282,12 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--eps-end", type=float, default=0.05)
+    parser.add_argument("--pbt", action="store_true", help="Enable Population-Based Training")
     args = parser.parse_args()
     
     run_self_play(start_cycle=args.start_cycle, 
                   end_cycle=args.end_cycle, 
                   episodes_per_phase=args.episodes,
                   lr=args.lr,
-                  eps_end=args.eps_end)
+                  eps_end=args.eps_end,
+                  pbt=args.pbt)

@@ -58,6 +58,9 @@ class SimulationState(BaseState):
         self._detection_probability = 0.25  # Lowered structured collapse prob
         self._detection_delay = 2
         self._false_positive_rate = 0.05
+        
+        # Phase 9 Defensive Realism
+        self._patch_cooldowns: Dict[str, int] = {}
 
     def compute_state_hash(self) -> int:
         """
@@ -143,6 +146,12 @@ class SimulationState(BaseState):
         triggered = [n for n, t in self._detection_queue if t <= current_time]
         self._detection_queue = [(n, t) for n, t in self._detection_queue if t > current_time]
         return triggered
+        
+    def get_patch_cooldown(self, node_id: str) -> int:
+        return self._patch_cooldowns.get(node_id, -1)
+        
+    def set_patch_cooldown(self, node_id: str, expiry_time: int) -> None:
+        self._patch_cooldowns[node_id] = expiry_time
 
     def set_ids_parameters(self, prob: float, prompt_delay: int, fp_rate: float) -> None:
         """Configure IDS parameters."""

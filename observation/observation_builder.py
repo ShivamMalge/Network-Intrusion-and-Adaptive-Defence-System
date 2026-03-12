@@ -61,14 +61,12 @@ class ObservationBuilder:
             # Attacker knows the type if they've compromised it or it's a known scanned node
             node = state.graph_manager.get_node(node_id)
             if node:
-                if node_id in compromised:
+                if node_id in compromised or node_id in scanned:
                     node_data["node_type"] = node.node_type.name
-                    node_data["status"] = "COMPROMISED"
-                elif node_id in scanned:
-                    node_data["node_type"] = node.node_type.name
-                    node_data["status"] = "DISCOVERED"
-                else:
-                    node_data["status"] = "DISCOVERED" # Neighbor of a compromised node
+                    
+                node_data["status"] = node.status.name
+                node_data["compromised"] = (node_id in compromised)
+                node_data["detected_threat"] = (node_id in state.defender_detected_nodes)
 
 
             # Visible vulnerabilities
@@ -116,7 +114,8 @@ class ObservationBuilder:
                 "node_id": node_id,
                 "node_type": node.node_type.name,
                 "status": node.status.name,
-                "detected_threat": node_id in detected
+                "compromised": (node_id in state.attacker_compromised),
+                "detected_threat": (node_id in detected)
             }
             
             # Visible vulnerabilities

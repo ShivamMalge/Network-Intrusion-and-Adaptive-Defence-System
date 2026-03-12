@@ -1,0 +1,11 @@
+{
+    "episodes": 1000,
+    "attacker_win_rate": 100.0,
+    "avg_length": 8.156,
+    "avg_reward": 44.39888000000002,
+    "reward_std": 2.633448755073847,
+    "length_std": 2.2524795226594176,
+    "max_win_streak": 1000,
+    "max_loss_streak": 0,
+    "verdict": "UNSTABLE"
+}

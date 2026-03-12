@@ -29,166 +29,310 @@
             "win_rate": 68.0,
             "avg_reward_atk": 34.130600000000015,
             "avg_length": 42.97
+        },
+        "D6": {
+            "win_rate": 77.0,
+            "avg_reward_atk": 43.10420000000001,
+            "avg_length": 40.79
+        },
+        "D7": {
+            "win_rate": 82.0,
+            "avg_reward_atk": 48.608200000000025,
+            "avg_length": 43.09
         }
     },
     "A1": {
         "D0": {
             "win_rate": 100.0,
-            "avg_reward_atk": 76.59000000000003,
+            "avg_reward_atk": 72.17000000000003,
             "avg_length": 41.0
         },
         "D1": {
-            "win_rate": 92.0,
-            "avg_reward_atk": 41.77560000000001,
-            "avg_length": 41.72
-        },
-        "D2": {
-            "win_rate": 91.0,
-            "avg_reward_atk": 57.02340000000002,
-            "avg_length": 37.83
-        },
-        "D3": {
-            "win_rate": 77.0,
-            "avg_reward_atk": 56.282000000000025,
+            "win_rate": 90.0,
+            "avg_reward_atk": 41.37200000000001,
             "avg_length": 41.9
         },
+        "D2": {
+            "win_rate": 90.0,
+            "avg_reward_atk": 59.72700000000002,
+            "avg_length": 38.15
+        },
+        "D3": {
+            "win_rate": 79.0,
+            "avg_reward_atk": 60.113600000000034,
+            "avg_length": 41.82
+        },
         "D4": {
-            "win_rate": 69.0,
-            "avg_reward_atk": 36.20260000000001,
-            "avg_length": 44.37
+            "win_rate": 74.0,
+            "avg_reward_atk": 37.546800000000005,
+            "avg_length": 43.66
         },
         "D5": {
-            "win_rate": 68.0,
-            "avg_reward_atk": 42.13260000000001,
-            "avg_length": 42.87
+            "win_rate": 76.0,
+            "avg_reward_atk": 42.79240000000001,
+            "avg_length": 42.38
+        },
+        "D6": {
+            "win_rate": 72.0,
+            "avg_reward_atk": 40.65400000000001,
+            "avg_length": 42.05
+        },
+        "D7": {
+            "win_rate": 89.0,
+            "avg_reward_atk": 47.96180000000002,
+            "avg_length": 41.41
         }
     },
     "A2": {
         "D0": {
-            "win_rate": 64.0,
-            "avg_reward_atk": 34.16600000000002,
-            "avg_length": 41.7
+            "win_rate": 74.0,
+            "avg_reward_atk": 36.69200000000002,
+            "avg_length": 40.4
         },
         "D1": {
             "win_rate": 100.0,
-            "avg_reward_atk": 47.83000000000002,
+            "avg_reward_atk": 49.52000000000002,
             "avg_length": 37.0
         },
         "D2": {
-            "win_rate": 72.0,
-            "avg_reward_atk": 36.20320000000002,
-            "avg_length": 39.84
+            "win_rate": 69.0,
+            "avg_reward_atk": 35.444200000000016,
+            "avg_length": 40.29
         },
         "D3": {
-            "win_rate": 55.00000000000001,
-            "avg_reward_atk": 39.8394,
-            "avg_length": 44.03
+            "win_rate": 51.0,
+            "avg_reward_atk": 37.11840000000001,
+            "avg_length": 44.58
         },
         "D4": {
-            "win_rate": 71.0,
-            "avg_reward_atk": 36.91500000000001,
-            "avg_length": 41.25
+            "win_rate": 65.0,
+            "avg_reward_atk": 35.68700000000002,
+            "avg_length": 42.15
         },
         "D5": {
-            "win_rate": 66.0,
-            "avg_reward_atk": 38.14440000000001,
-            "avg_length": 42.28
+            "win_rate": 63.0,
+            "avg_reward_atk": 39.9788,
+            "avg_length": 42.56
+        },
+        "D6": {
+            "win_rate": 73.0,
+            "avg_reward_atk": 44.67280000000002,
+            "avg_length": 40.86
+        },
+        "D7": {
+            "win_rate": 69.0,
+            "avg_reward_atk": 42.17860000000002,
+            "avg_length": 42.07
         }
     },
     "A3": {
         "D0": {
-            "win_rate": 94.0,
-            "avg_reward_atk": 65.65140000000002,
-            "avg_length": 46.93
+            "win_rate": 97.0,
+            "avg_reward_atk": 60.64200000000002,
+            "avg_length": 47.9
         },
         "D1": {
-            "win_rate": 85.0,
-            "avg_reward_atk": 45.136000000000024,
-            "avg_length": 46.7
+            "win_rate": 76.0,
+            "avg_reward_atk": 41.728200000000015,
+            "avg_length": 47.59
         },
         "D2": {
-            "win_rate": 89.0,
-            "avg_reward_atk": 61.29220000000001,
-            "avg_length": 36.89
+            "win_rate": 91.0,
+            "avg_reward_atk": 59.476200000000034,
+            "avg_length": 37.19
         },
         "D3": {
-            "win_rate": 62.0,
-            "avg_reward_atk": 39.712,
-            "avg_length": 42.9
+            "win_rate": 61.0,
+            "avg_reward_atk": 43.685199999999995,
+            "avg_length": 42.74
         },
         "D4": {
-            "win_rate": 75.0,
-            "avg_reward_atk": 39.82800000000002,
-            "avg_length": 45.1
+            "win_rate": 72.0,
+            "avg_reward_atk": 38.438400000000016,
+            "avg_length": 44.58
         },
         "D5": {
-            "win_rate": 77.0,
-            "avg_reward_atk": 41.29180000000001,
-            "avg_length": 41.41
+            "win_rate": 82.0,
+            "avg_reward_atk": 41.82840000000001,
+            "avg_length": 39.58
+        },
+        "D6": {
+            "win_rate": 89.0,
+            "avg_reward_atk": 44.703599999999994,
+            "avg_length": 33.82
+        },
+        "D7": {
+            "win_rate": 72.0,
+            "avg_reward_atk": 45.42939999999999,
+            "avg_length": 41.03
         }
     },
     "A4": {
         "D0": {
-            "win_rate": 88.0,
-            "avg_reward_atk": 66.91260000000003,
-            "avg_length": 46.87
+            "win_rate": 91.0,
+            "avg_reward_atk": 61.66200000000001,
+            "avg_length": 46.9
         },
         "D1": {
-            "win_rate": 78.0,
-            "avg_reward_atk": 48.60300000000003,
-            "avg_length": 46.85
+            "win_rate": 84.0,
+            "avg_reward_atk": 48.01340000000002,
+            "avg_length": 45.83
         },
         "D2": {
-            "win_rate": 77.0,
-            "avg_reward_atk": 55.230200000000025,
-            "avg_length": 39.99
+            "win_rate": 76.0,
+            "avg_reward_atk": 52.354800000000026,
+            "avg_length": 39.76
         },
         "D3": {
-            "win_rate": 70.0,
-            "avg_reward_atk": 54.12700000000001,
-            "avg_length": 40.65
+            "win_rate": 79.0,
+            "avg_reward_atk": 55.89000000000001,
+            "avg_length": 39.5
         },
         "D4": {
-            "win_rate": 56.99999999999999,
-            "avg_reward_atk": 31.956200000000013,
-            "avg_length": 47.69
+            "win_rate": 51.0,
+            "avg_reward_atk": 30.912000000000017,
+            "avg_length": 47.4
         },
         "D5": {
-            "win_rate": 78.0,
-            "avg_reward_atk": 40.10280000000001,
-            "avg_length": 41.36
+            "win_rate": 76.0,
+            "avg_reward_atk": 39.720000000000006,
+            "avg_length": 42.0
+        },
+        "D6": {
+            "win_rate": 70.0,
+            "avg_reward_atk": 37.48400000000001,
+            "avg_length": 42.8
+        },
+        "D7": {
+            "win_rate": 84.0,
+            "avg_reward_atk": 51.91160000000003,
+            "avg_length": 42.42
         }
     },
     "A5": {
         "D0": {
             "win_rate": 100.0,
-            "avg_reward_atk": 53.99600000000001,
-            "avg_length": 39.7
+            "avg_reward_atk": 54.77520000000001,
+            "avg_length": 39.74
         },
         "D1": {
-            "win_rate": 93.0,
-            "avg_reward_atk": 41.566000000000024,
-            "avg_length": 40.7
+            "win_rate": 92.0,
+            "avg_reward_atk": 41.624000000000024,
+            "avg_length": 40.8
         },
         "D2": {
-            "win_rate": 86.0,
-            "avg_reward_atk": 52.075200000000024,
-            "avg_length": 38.24
+            "win_rate": 91.0,
+            "avg_reward_atk": 51.31900000000002,
+            "avg_length": 37.05
         },
         "D3": {
-            "win_rate": 79.0,
-            "avg_reward_atk": 57.1584,
-            "avg_length": 41.58
+            "win_rate": 83.0,
+            "avg_reward_atk": 57.91080000000001,
+            "avg_length": 40.96
         },
         "D4": {
-            "win_rate": 76.0,
-            "avg_reward_atk": 38.56220000000001,
-            "avg_length": 41.89
+            "win_rate": 78.0,
+            "avg_reward_atk": 38.16920000000002,
+            "avg_length": 42.04
         },
         "D5": {
-            "win_rate": 65.0,
-            "avg_reward_atk": 40.89880000000001,
-            "avg_length": 43.06
+            "win_rate": 71.0,
+            "avg_reward_atk": 47.930200000000006,
+            "avg_length": 41.99
+        },
+        "D6": {
+            "win_rate": 75.0,
+            "avg_reward_atk": 43.161800000000014,
+            "avg_length": 39.91
+        },
+        "D7": {
+            "win_rate": 88.0,
+            "avg_reward_atk": 50.69520000000001,
+            "avg_length": 39.74
+        }
+    },
+    "A6": {
+        "D0": {
+            "win_rate": 72.0,
+            "avg_reward_atk": 41.45180000000001,
+            "avg_length": 43.91
+        },
+        "D1": {
+            "win_rate": 98.0,
+            "avg_reward_atk": 44.31760000000001,
+            "avg_length": 42.12
+        },
+        "D2": {
+            "win_rate": 71.0,
+            "avg_reward_atk": 36.34100000000002,
+            "avg_length": 39.45
+        },
+        "D3": {
+            "win_rate": 98.0,
+            "avg_reward_atk": 44.96900000000001,
+            "avg_length": 7.05
+        },
+        "D4": {
+            "win_rate": 86.0,
+            "avg_reward_atk": 41.352,
+            "avg_length": 26.4
+        },
+        "D5": {
+            "win_rate": 89.0,
+            "avg_reward_atk": 40.8394,
+            "avg_length": 20.53
+        },
+        "D6": {
+            "win_rate": 97.0,
+            "avg_reward_atk": 44.002399999999994,
+            "avg_length": 12.88
+        },
+        "D7": {
+            "win_rate": 73.0,
+            "avg_reward_atk": 38.247600000000006,
+            "avg_length": 28.12
+        }
+    },
+    "A7": {
+        "D0": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 46.455400000000026,
+            "avg_length": 10.73
+        },
+        "D1": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 43.84000000000002,
+            "avg_length": 8.0
+        },
+        "D2": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 43.84000000000002,
+            "avg_length": 8.0
+        },
+        "D3": {
+            "win_rate": 95.0,
+            "avg_reward_atk": 44.269,
+            "avg_length": 8.55
+        },
+        "D4": {
+            "win_rate": 95.0,
+            "avg_reward_atk": 42.398200000000024,
+            "avg_length": 10.09
+        },
+        "D5": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 44.362400000000015,
+            "avg_length": 7.88
+        },
+        "D6": {
+            "win_rate": 99.0,
+            "avg_reward_atk": 43.55220000000001,
+            "avg_length": 8.39
+        },
+        "D7": {
+            "win_rate": 100.0,
+            "avg_reward_atk": 44.670000000000016,
+            "avg_length": 8.0
         }
     }
 }

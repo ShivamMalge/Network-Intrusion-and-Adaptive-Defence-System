@@ -1,0 +1,38 @@
+[
+    {
+        "episode": 1,
+        "win_rate": 0.0,
+        "avg_reward": -1.0000000000000002,
+        "avg_steps": 50.0
+    },
+    {
+        "episode": 100,
+        "win_rate": 0.0,
+        "avg_reward": 26.080000000000023,
+        "avg_steps": 50.0
+    },
+    {
+        "episode": 200,
+        "win_rate": 0.0,
+        "avg_reward": 26.080000000000023,
+        "avg_steps": 50.0
+    },
+    {
+        "episode": 300,
+        "win_rate": 0.0,
+        "avg_reward": 28.600000000000023,
+        "avg_steps": 50.0
+    },
+    {
+        "episode": 400,
+        "win_rate": 0.0,
+        "avg_reward": 13.72000000000001,
+        "avg_steps": 50.0
+    },
+    {
+        "episode": 500,
+        "win_rate": 0.0,
+        "avg_reward": 11.510000000000005,
+        "avg_steps": 50.0
+    }
+]

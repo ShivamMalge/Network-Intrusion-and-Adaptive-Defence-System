@@ -85,7 +85,7 @@ class DeterministicStepPipeline:
                 pass
 
         # 6. Advance - ONLY place where mutation happens
-        self.update_state(state, effects)
+        self.update_state(state, effects, attacker_action)
 
         # 7. Check Terminal
         done, termination_reason = self.check_termination(state)
@@ -110,6 +110,13 @@ class DeterministicStepPipeline:
         defender_action.validate()
 
     def apply_attacker_action(self, state: SimulationState, action: AttackerAction, effects: TransitionEffects) -> Any:
+        # Enforce ISOLATION blocking
+        target = action.target_node
+        if target:
+            target_node_obj = state.graph_manager.get_node(target)
+            if target_node_obj and target_node_obj.status == NodeStatus.ISOLATED:
+                return None  # Action fails completely if node is electrically ISOLATED
+
         # Pass necessary data directly to exploit resolution
         if action.action_type == ActionType.SCAN:
             if action.target_node:
@@ -134,8 +141,10 @@ class DeterministicStepPipeline:
                 if source_node:
                     try:
                         source_priv = state.vulnerability_registry.get_privilege(source_node)
+                        # MOVE_LATERAL should only grant minimal entry privilege (USER), NOT the source's ROOT
+                        entry_priv = min(source_priv, PrivilegeLevel.USER)
                         if source_priv != PrivilegeLevel.NONE:
-                            effects.privilege_escalations.append((action.target_node, source_priv))
+                            effects.privilege_escalations.append((action.target_node, entry_priv))
                     except Exception:
                         pass
                         
@@ -151,6 +160,10 @@ class DeterministicStepPipeline:
             return False
 
         if action.action_type == ActionType.PATCH:
+            # Enforce cooldown (Phase 9)
+            if state.timestamp < state.get_patch_cooldown(target):
+                 return False
+                 
             # Stage patching
             effects.patched_nodes.append(target)
             success = True
@@ -223,7 +236,7 @@ class DeterministicStepPipeline:
                 
         return success
 
-    def update_state(self, state: SimulationState, effects: TransitionEffects) -> None:
+    def update_state(self, state: SimulationState, effects: TransitionEffects, attacker_action: AttackerAction) -> None:
         """Apply all staged effects to the state."""
         # Semantic Model A: Detection appears at t_exploit + detection_delay
         horizon_time = state.timestamp + 1
@@ -238,6 +251,17 @@ class DeterministicStepPipeline:
             if all_nodes:
                 fp_node = self._rng.choice(all_nodes)
                 state.add_to_detection_queue(fp_node, state.timestamp + state.detection_delay)
+                
+        # 2.5 Phase 9 Continuous Probabilistic Detection
+        for comp_id in state.attacker_compromised:
+             if comp_id not in state.defender_detected_nodes:
+                 # Check if the node is monitored
+                 node_obj = state.graph_manager.get_node(comp_id)
+                 if node_obj and node_obj.metadata.get("monitored", False):
+                     # Check if it is already in the queue
+                     if not any((n == comp_id) for n, t in state._detection_queue):
+                         if self._rng.uniform(0.0, 1.0) < state.detection_probability:
+                             state.add_to_detection_queue(comp_id, state.timestamp + state.detection_delay)
 
         # 3. Process triggered detections using end-of-step horizon
         triggered = state.process_detection_queue(horizon_time)
@@ -254,6 +278,8 @@ class DeterministicStepPipeline:
         # 5. Apply Patching
         for node_id in effects.patched_nodes:
             state.vulnerability_registry.patch_vulnerabilities(node_id)
+            # Set cooldown for 5 steps (Phase 9)
+            state.set_patch_cooldown(node_id, state.timestamp + 5)
             
         # 6. Apply Isolation
         for node_id in effects.isolated_nodes:
@@ -266,8 +292,17 @@ class DeterministicStepPipeline:
         # 8. Apply Privilege Escalations
         for node_id, new_level in effects.privilege_escalations:
             try:
+                # 8.a Strict validation invariant constraints
+                try:
+                    old_level = state.vulnerability_registry.get_privilege(node_id)
+                except Exception:
+                    old_level = PrivilegeLevel.NONE
+                
                 state.vulnerability_registry.escalate_privilege(node_id, new_level)
-            except Exception:
+            except Exception as e:
+                # Re-raise AssertionErrors to halt on structural violations
+                if isinstance(e, AssertionError):
+                    raise e
                 pass
 
 

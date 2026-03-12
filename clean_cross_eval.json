@@ -1,0 +1,13 @@
+{
+    "episodes": 1000,
+    "attacker_win_rate": 0.0,
+    "defender_win_rate": 100.0,
+    "avg_episode_length": 50.0,
+    "avg_attacker_reward": -1.0000000000000002,
+    "reward_std": 2.220446049250313e-16,
+    "length_std": 0.0,
+    "max_win_streak_attacker": 0,
+    "max_win_streak_defender": 1000,
+    "max_loss_streak_attacker": 1000,
+    "max_loss_streak_defender": 0
+}

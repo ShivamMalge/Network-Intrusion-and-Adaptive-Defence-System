@@ -91,24 +91,20 @@ class ActionEncoder:
         
         if role == "attacker":
             # Mask for SCAN, EXPLOIT, MOVE_LATERAL
-            compromised = [n["node_id"] for n in sorted_nodes if n.get("status") == "COMPROMISED"]
-            
             for i, node_data in enumerate(sorted_nodes):
                 if i >= self.max_nodes: break
                 node_id = node_data["node_id"]
                 
-                # SCAN: Valid if node is DISCOVERED but not KNOWN (in our obs logic, KNOWN means scanned/comp)
-                # Actually, in simplified terms, allow SCAN on any known node that isn't compromised
-                if node_data.get("status") != "COMPROMISED":
+                # SCAN: Valid on any node that is not yet compromised
+                if not node_data.get("compromised", False):
                     mask[self.all_types.index(ActionType.SCAN) * self.max_nodes + i] = 1.0
                 
                 # EXPLOIT: Valid if node has visible vulnerabilities (scanned/compromised have vulns populated if visible)
                 if len(node_data.get("vulnerabilities", [])) > 0:
                     mask[self.all_types.index(ActionType.EXPLOIT) * self.max_nodes + i] = 1.0
                     
-                # MOVE_LATERAL: Valid if node is a neighbor of a compromised node (DISCOVERED status)
-                # and not already compromised
-                if node_data.get("status") == "DISCOVERED":
+                # MOVE_LATERAL: Valid if node is known but not compromised
+                if not node_data.get("compromised", False):
                     mask[self.all_types.index(ActionType.MOVE_LATERAL) * self.max_nodes + i] = 1.0
                     
         elif role == "defender":

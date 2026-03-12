@@ -51,7 +51,7 @@ class StateEncoder:
             node_matrix[i, 0] = 1.0
             
             # [1] is_compromised
-            node_matrix[i, 1] = 1.0 if node_data.get("status") == "COMPROMISED" else 0.0
+            node_matrix[i, 1] = 1.0 if node_data.get("compromised", False) else 0.0
             
             # [2] is_detected
             node_matrix[i, 2] = 1.0 if node_data.get("detected_threat") else 0.0
@@ -71,9 +71,6 @@ class StateEncoder:
             if status in self.node_statuses:
                 status_idx = self.node_statuses.index(status)
                 node_matrix[i, 10 + status_idx] = 1.0
-            elif status == "COMPROMISED":
-                # For encoding status, COMPROMISED nodes are still ACTIVE in status enum terms
-                node_matrix[i, 10] = 1.0
                 
         # 3. Global features
         global_vec = np.zeros(self.global_feature_dim, dtype=np.float32)

@@ -84,14 +84,14 @@ class EnvironmentEngine(BaseEnvironment):
         from vulnerabilities.vulnerability import Vulnerability
         from vulnerabilities.privilege_model import PrivilegeLevel
 
-        # 2. Add nodes
-        gm.add_node(Node("dmz", NodeType.WORKSTATION))
+        # 2. Add nodes (All monitored for detection capability)
+        gm.add_node(Node("dmz", NodeType.WORKSTATION, metadata={"monitored": True}))
         reg.register_node("dmz")
         
-        gm.add_node(Node("internal", NodeType.SERVER))
+        gm.add_node(Node("internal", NodeType.SERVER, metadata={"monitored": True}))
         reg.register_node("internal")
         
-        gm.add_node(Node("data", NodeType.CRITICAL_ASSET))
+        gm.add_node(Node("data", NodeType.CRITICAL_ASSET, metadata={"monitored": True}))
         reg.register_node("data")
 
         # 3. Add vulnerabilities
@@ -101,8 +101,12 @@ class EnvironmentEngine(BaseEnvironment):
         reg.add_vulnerability("internal", Vulnerability(
             vuln_id="INTERNAL-VULN", severity=7.0, required_privilege=PrivilegeLevel.USER, zero_day=False
         ))
+        # Data needs an escalation chain from USER -> ADMIN -> ROOT, since MOVE_LATERAL only provides USER
         reg.add_vulnerability("data", Vulnerability(
-            vuln_id="DATA-VULN", severity=10.0, required_privilege=PrivilegeLevel.ADMIN, zero_day=False
+            vuln_id="DATA-USER-TO-ADMIN", severity=7.0, required_privilege=PrivilegeLevel.USER, zero_day=False
+        ))
+        reg.add_vulnerability("data", Vulnerability(
+            vuln_id="DATA-ADMIN-TO-ROOT", severity=10.0, required_privilege=PrivilegeLevel.ADMIN, zero_day=False
         ))
 
         # 4. Add edges
